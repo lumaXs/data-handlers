@@ -1,3 +1,7 @@
+[🇺🇸 English](./README.md) | 🇧🇷 [Português](./README.pt-BR.md)
+
+---
+
 # data-handlers
 
 > Zero-dependency normalization and validation library with pluggable handlers — built for the Brazilian market, designed for everyone.

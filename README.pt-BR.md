@@ -1,3 +1,7 @@
+🇧🇷 Português | [🇺🇸 English](./README.md)
+
+---
+
 # data-handlers
 
 > Biblioteca de normalização e validação extensível com zero dependências — com suporte nacional de primeira classe e sistema de schemas.
