@@ -1,0 +1,51 @@
+{
+  "name": "data-handlers",
+  "version": "0.0.1",
+  "description": "Extensible normalization and validation library with pluggable handlers (name, number, date, cpf, cnpj, phone, cep, slug) — zero dependencies, built for the Brazilian market 🇧🇷",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "src",
+    "handlers",
+    "plugins"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release:patch": "pnpm test && pnpm version patch && pnpm publish",
+    "release:minor": "pnpm test && pnpm version minor && pnpm publish",
+    "release:major": "pnpm test && pnpm version major && pnpm publish",
+    "update:repo": "pnpm release:patch && git push"
+  },
+  "keywords": [
+    "normalize",
+    "validate",
+    "formatter",
+    "format",
+    "intl",
+    "plugin",
+    "string",
+    "number",
+    "date",
+    "cpf",
+    "cnpj",
+    "br"
+  ],
+  "author": "Emersom Oliveira",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}
