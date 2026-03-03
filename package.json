@@ -1,14 +1,17 @@
 {
   "name": "data-handlers",
   "version": "0.0.1",
-  "description": "Extensible normalization and validation library with pluggable handlers (name, number, date, cpf, cnpj, phone, cep, slug) — zero dependencies, built for the Brazilian market 🇧🇷",
+  "description": "Normalização e validação extensível com plugins plugáveis (name, number, date, cpf, cnpj, phone, cep, slug, email, rg, color) — zero dependências, foco no mercado brasileiro 🇧🇷",
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
   "exports": {
     ".": {
       "import": "./index.js",
-      "types": "./index.d.ts"
+      "types":  "./index.d.ts"
+    },
+    "./schema": {
+      "import": "./schema/index.js"
     }
   },
   "files": [
@@ -16,29 +19,22 @@
     "index.d.ts",
     "src",
     "handlers",
-    "plugins"
+    "plugins",
+    "api",
+    "schema"
   ],
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test":         "vitest run",
+    "test:watch":   "vitest",
     "release:patch": "pnpm test && pnpm version patch && pnpm publish",
     "release:minor": "pnpm test && pnpm version minor && pnpm publish",
-    "release:major": "pnpm test && pnpm version major && pnpm publish",
-    "update:repo": "pnpm release:patch && git push"
+    "release:major": "pnpm test && pnpm version major && pnpm publish"
   },
   "keywords": [
-    "normalize",
-    "validate",
-    "formatter",
-    "format",
-    "intl",
-    "plugin",
-    "string",
-    "number",
-    "date",
-    "cpf",
-    "cnpj",
-    "br"
+    "normalize", "validate", "formatter", "schema",
+    "intl", "plugin", "string", "number", "date",
+    "cpf", "cnpj", "cep", "rg", "phone", "slug", "email", "color",
+    "br", "brazil", "brasil"
   ],
   "author": "Emersom Oliveira",
   "license": "MIT",

@@ -1,48 +1,26 @@
-[🇺🇸 English](./README.md) | 🇧🇷 [Português](./README.pt-BR.md)
-
----
-
 # data-handlers
 
-> Extensible normalization and validation library with pluggable handlers for names, numbers, dates, and more.
+> Zero-dependency normalization and validation library with pluggable handlers — built for the Brazilian market, designed for everyone.
 
-[![npm version](https://img.shields.io/npm/v/data-handlers)](https://www.npmjs.com/package/data-handlers)
+[![npm](https://img.shields.io/npm/v/data-handlers)](https://www.npmjs.com/package/data-handlers)
 [![license](https://img.shields.io/npm/l/data-handlers)](./LICENSE)
-[![node](https://img.shields.io/node/v/data-handlers)](https://nodejs.org)
+[![node](https://img.shields.io/node/v/data-handlers)](./package.json)
 
 ---
 
-## Overview
+## Features
 
-**data-handlers** provides a unified interface to **format** and **validate** common data types. It ships with three built-in handlers — `name`, `number`, and `date` — plus four official plugins: `cpfHandler`, `cnpjHandler`, `phoneHandler`, and `cepHandler`. The library was designed from the ground up to be extensible via additional plugins.
-
-The `register()` function (or its semantic alias `createPlugin()`) lets you add any custom type to the ecosystem: CPF, CNPJ, ZIP codes, phone numbers, slugs, and whatever else you need.
-
-All built-in formatting is powered by the native [Intl](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl) API, with zero external dependencies.
-
----
-
-## Plugin Ecosystem
-
-**data-handlers** key advantage over other validation libraries is its support for **official plugins targeting the Brazilian market**, which libraries like Zod completely ignore.
-
-```
-data-handlers           → core (normalize, validate, register, createPlugin)
-data-handlers-cpf       → CPF validation and formatting
-data-handlers-cnpj      → CNPJ validation and formatting
-data-handlers-phone     → Brazilian phone number formatting
-data-handlers-cep       → ZIP code formatting and lookup
-```
-
-> These plugins are now included in the core and ready to use.
-
----
-
-## Requirements
-
-- Node.js `>= 18`
-- ESM-only (`"type": "module"`)
-- TypeScript: types included via `index.d.ts`
+- **Zero dependencies** — pure JS, only native APIs (`Intl`, `Map`, `Proxy`)
+- **Built-in handlers** — name, number, date
+- **Brazilian plugins** — CPF, CNPJ, CEP, phone, RG, slug, email, color
+- **Schema system** — validate and normalize entire objects, à la Zod
+- **Fluent proxy** — `handlers.cpf.parse(...)`, `handlers.name.safe(...)`
+- **Zod-style aliases** — `.parse()` and `.safe()` on every type
+- **Introspection** — `handlers.has('cpf')`, `handlers.types`, `handlers.$`
+- **Alias registration** — `registerAliases('name', 'nome', 'fullName')`
+- **Case-insensitive** — `handlers.Name` === `handlers.name` (documented by design)
+- **Immutable accessors** — `Object.freeze` + accessor cache per type
+- **Full TypeScript** — `.d.ts` with JSDoc autocomplete for JS too
 
 ---
 
@@ -50,295 +28,184 @@ data-handlers-cep       → ZIP code formatting and lookup
 
 ```bash
 npm install data-handlers
+# or
+pnpm add data-handlers
 ```
 
 ---
 
-## API
-
-### `normalize({ type, value, options? })`
-
-Normalizes and formats a value using the handler registered for the given type. **Throws** `TypeError` if the type is unknown or the value fails validation.
+## Quick start
 
 ```js
-import { normalize } from 'data-handlers'
+import { handlers, normalize, validate, register, schema } from 'data-handlers'
 
-normalize({ type: 'name', value: '  john   doe  ' })
-// → 'John Doe'
+// Name
+handlers.name.normalize('  emerson   ribeiro  ')
+// → 'Emerson Ribeiro'
 
-normalize({ type: 'number', value: 1234567.89, options: { locale: 'pt-BR', style: 'currency', currency: 'BRL' } })
+handlers.name.parse('  maria das dores  ')   // Zod-style alias
+// → 'Maria das Dores'
+
+// Number
+handlers.number.normalize(1234567.89, {
+    style: 'currency', currency: 'BRL', locale: 'pt-BR'
+})
 // → 'R$ 1.234.567,89'
 
-normalize({ type: 'date', value: '2024-01-15', options: { locale: 'pt-BR', dateStyle: 'long' } })
-// → '15 de janeiro de 2024'
+// Date — accepts Date, ISO string, or Unix timestamp (ms)
+handlers.date.normalize(new Date(), { dateStyle: 'long', locale: 'pt-BR' })
+// → '3 de março de 2026'
+
+handlers.date.normalize(1735689600000, { dateStyle: 'short', locale: 'pt-BR' })
+// → '01/01/2025'
+
+// Brazilian plugins
+handlers.cpf.normalize('11144477735')   // → '111.444.777-35'
+handlers.cnpj.normalize('11222333000181')  // → '11.222.333/0001-81'
+handlers.phone.normalize('11987654321')    // → '(11) 98765-4321'
+handlers.cep.normalize('01310100')         // → '01310-100'
+handlers.email.normalize('  User@SITE.COM  ') // → 'user@site.com'
+handlers.rg.normalize('123456789')        // → '12.345.678-9'
+handlers.color.normalize('#abc')          // → '#aabbcc'
+handlers.slug.normalize('Olá Mundo!')     // → 'ola-mundo'
+
+// Safe validation (never throws)
+handlers.cpf.safe('000.000.000-00')
+// → { valid: false, value: null, error: '[normalize:cpf] ...' }
 ```
 
 ---
 
-### `validate({ type, value, options? })`
-
-Same logic as `normalize()`, but **never throws**. Returns an object with `valid`, `value`, and `error` — ideal for form validation.
+## Introspection
 
 ```js
-import { validate } from 'data-handlers'
+handlers.has('cpf')       // true
+handlers.types            // ['name', 'number', 'date', 'cpf', ...]
 
-validate({ type: 'name', value: '  john doe  ' })
-// → { valid: true, value: 'John Doe', error: null }
-
-validate({ type: 'name', value: '' })
-// → { valid: false, value: null, error: '[normalize:name] Expected non-empty string. Received: ' }
-
-validate({ type: 'number', value: NaN })
-// → { valid: false, value: null, error: '[normalize:number] Expected finite number. Received: NaN' }
+// Meta namespace
+handlers.$.has('cnpj')    // true
+handlers.$.types          // same as handlers.types
 ```
 
 ---
 
-### `register(type, handler)`
+## Accessor API
 
-Registers a custom handler for any type. Overwrites the existing handler if the type is already registered.
+Each `handlers.<type>` exposes four methods:
 
-| Parameter | Type       | Description                                               |
-|-----------|------------|-----------------------------------------------------------|
-| `type`    | `string`   | Type identifier — case-insensitive and whitespace-trimmed |
-| `handler` | `Function` | `(value: any, options?: any) => string`                   |
-
-**Throws** `TypeError` if `handler` is not a function.
+| Method               | Behaviour                                    |
+|----------------------|----------------------------------------------|
+| `.normalize(v, opts)` | Normalizes; throws if invalid               |
+| `.validate(v, opts)`  | Never throws; returns `{ valid, value, error }` |
+| `.parse(v, opts)`     | Alias for `.normalize` (Zod-style)          |
+| `.safe(v, opts)`      | Alias for `.validate` (Zod-style)           |
 
 ---
 
-### `createPlugin(type, handler)`
-
-Semantic alias for `register()`. Use this when **publishing a plugin** package under `data-handlers-*`.
+## Schema system
 
 ```js
-// data-handlers-slug/index.js
+import { schema } from 'data-handlers'
+
+const userSchema = schema({
+    name:     'name',
+    document: 'cpf',
+    phone:    { type: 'phone', optional: true },
+    amount:   { type: 'number', options: { style: 'currency', currency: 'BRL', locale: 'pt-BR' } },
+    website:  { type: 'slug', default: 'sem-site', optional: true },
+})
+
+// parse — throws SchemaError with .errors map if invalid
+userSchema.parse({
+    name:     'JOAO SILVA',
+    document: '11144477735',
+    amount:   99.9,
+})
+// { name: 'Joao Silva', document: '111.444.777-35', phone: null, amount: 'R$ 99,90', website: 'sem-site' }
+
+// safeParse — never throws
+userSchema.safeParse({ name: '', document: 'bad' })
+// { success: false, data: null, errors: { name: '...', document: '...' } }
+
+// Schema utilities (immutable — always return new schemas)
+const partialSchema = userSchema.partial()            // all fields optional
+const miniSchema    = userSchema.pick('name', 'document') // only these fields
+const noPhone       = userSchema.omit('phone')        // exclude field
+const extSchema     = userSchema.extend({ email: 'email' }) // add fields
+```
+
+---
+
+## Custom registration
+
+```js
+import { register, registerAliases } from 'data-handlers'
+
+register('phone', (value) => String(value).replace(/\D/g, ''))
+
+// Aliases — map multiple names to the same handler
+registerAliases('name', 'nome', 'fullName', 'fullname')
+handlers.nome.normalize('  joao  ')      // 'Joao'
+handlers.fullName.normalize('  joao  ')  // 'Joao'
+
+// For plugin authors
 import { createPlugin } from 'data-handlers'
-
-const slugHandler = (value) => {
-    if (typeof value !== 'string' || !value.trim()) {
-        throw new TypeError(`[normalize:slug] Expected non-empty string. Received: ${value}`)
-    }
-
-    return value
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-}
-
-createPlugin('slug', slugHandler)
+createPlugin('myType', myHandler)
 ```
-
-```js
-// usage
-import { normalize } from 'data-handlers'
-import 'data-handlers-slug'
-
-normalize({ type: 'slug', value: 'Olá Mundo Legal!' })
-// → 'ola-mundo-legal'
-```
-
-> **Tip:** Import plugins before calling `normalize()` so the `createPlugin()` side-effect runs first.
 
 ---
 
-## Built-in Handlers
+## Built-in handlers
 
 ### `name`
-
-Normalizes a full name string to **Title Case**, trimming and collapsing extra whitespace.
+Title Case with pt-BR connectives (`de`, `da`, `do`, `das`, `dos`, `e`) and English ones (`of`, `the`, `and`...) kept lowercase unless they're the first token. Accented characters handled via `toLocaleUpperCase('pt-BR')`.
 
 ```js
-normalize({ type: 'name', value: '   joão   da   silva   ' })
-// → 'João Da Silva'
+handlers.name.normalize('maria das dores')  // 'Maria das Dores'
+handlers.name.normalize('joao de paula', { lowerCaseWords: [] }) // 'Joao De Paula'
 ```
-
-**Throws** `TypeError` if `value` is not a non-empty string.
-
----
 
 ### `number`
-
-Formats a finite number into a locale-aware string via [`Intl.NumberFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat).
-
-| Option    | Type     | Default   | Description                    |
-|-----------|----------|-----------|--------------------------------|
-| `locale`  | `string` | `'en-US'` | BCP 47 language tag            |
-| `...rest` | `any`    | —         | Any `Intl.NumberFormatOptions` |
-
-```js
-normalize({ type: 'number', value: 1234567.89, options: { locale: 'pt-BR' } })
-// → '1.234.567,89'
-
-normalize({ type: 'number', value: 42, options: { locale: 'en-US', style: 'currency', currency: 'USD' } })
-// → '$42.00'
-
-normalize({ type: 'number', value: 0.753, options: { style: 'percent', maximumFractionDigits: 1 } })
-// → '75.3%'
-```
-
-**Throws** `TypeError` if `value` is not a finite number.
-
----
+Delegates to `Intl.NumberFormat`. Default locale: `pt-BR`.
+- `TypeError` if value is not a `number`
+- `RangeError` if value is `NaN` or `Infinity`
 
 ### `date`
-
-Formats a date value into a locale-aware string via [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat). Accepts a `Date` object, an ISO string, or any value parseable by the `Date` constructor.
-
-| Option    | Type     | Default   | Description                      |
-|-----------|----------|-----------|----------------------------------|
-| `locale`  | `string` | `'en-US'` | BCP 47 language tag              |
-| `...rest` | `any`    | —         | Any `Intl.DateTimeFormatOptions` |
-
-```js
-normalize({ type: 'date', value: new Date(2026, 2, 1), options: { locale: 'pt-BR' } })
-// → '01/03/2026'
-
-normalize({ type: 'date', value: new Date(2026, 2, 1), options: { locale: 'pt-BR', year: 'numeric', month: 'long', day: 'numeric' } })
-// → '1 de março de 2026'
-
-normalize({ type: 'date', value: '2024-01-15', options: { locale: 'en-US', dateStyle: 'long' } })
-// → 'January 15, 2024'
-```
-
-**Throws** `TypeError` if `value` cannot be parsed into a valid date.
+Delegates to `Intl.DateTimeFormat`. Accepts `Date`, ISO strings, and **numeric timestamps (ms)**. Default locale: `pt-BR`.
 
 ---
 
-## Building a Plugin
+## Plugins
 
-A plugin is any module that imports `createPlugin` and registers a handler. The handler should **validate and format** the value — and throw a `TypeError` with a descriptive prefix if the value is invalid.
+| Plugin          | Type     | Description                        |
+|-----------------|----------|------------------------------------|
+| `data-handlers-cpf`   | `cpf`   | Validates & formats CPF            |
+| `data-handlers-cnpj`  | `cnpj`  | Validates & formats CNPJ           |
+| `data-handlers-cep`   | `cep`   | Formats CEP                        |
+| `data-handlers-phone` | `phone` | Formats Brazilian phone numbers    |
+| `data-handlers-slug`  | `slug`  | Generates URL-friendly slugs       |
+| `data-handlers-email` | `email` | Validates & normalizes email       |
+| `data-handlers-rg`    | `rg`    | Formats Brazilian RG               |
+| `data-handlers-color` | `color` | Normalizes hex/rgb colors          |
 
-```js
-// data-handlers-cpf (example implementation)
-import { createPlugin } from 'data-handlers'
-
-const isValidCPF = (cpf) => {
-    const digits = cpf.replace(/\D/g, '')
-    if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false
-
-    const calc = (factor) =>
-        digits.slice(0, factor - 1).split('').reduce((sum, d, i) => sum + Number(d) * (factor - i), 0)
-
-    const mod = (n) => ((n * 10) % 11) % 10
-
-    return mod(calc(10)) === Number(digits[9]) && mod(calc(11)) === Number(digits[10])
-}
-
-const cpfHandler = (value) => {
-    const digits = String(value).replace(/\D/g, '')
-
-    if (!isValidCPF(digits)) {
-        throw new TypeError(`[normalize:cpf] Invalid CPF. Received: ${value}`)
-    }
-
-    return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-}
-
-createPlugin('cpf', cpfHandler)
-```
-
-```js
-import { normalize, validate } from 'data-handlers'
-
-normalize({ type: 'cpf', value: '11144477735' })
-// → '111.444.777-35'
-
-validate({ type: 'cpf', value: '00000000000' })
-// → { valid: false, value: null, error: '[normalize:cpf] Invalid CPF. Received: 00000000000' }
-```
-
----
-
-## Error Handling
-
-All handlers throw `TypeError` with a prefix that identifies the source:
-
-| Prefix               | Source            |
-|----------------------|-------------------|
-| `[normalize]`        | Core (`index.js`) |
-| `[normalize:name]`   | Name handler      |
-| `[normalize:number]` | Number handler    |
-| `[normalize:date]`   | Date handler      |
-| `[normalize:*]`      | External plugins  |
-
-Use `validate()` when you'd rather not deal with exceptions:
-
-```js
-const { valid, value, error } = validate({ type: 'cpf', value: input })
-
-if (!valid) {
-    console.error(error)
-}
-```
+All plugins are loaded automatically when importing `data-handlers`.
 
 ---
 
 ## TypeScript
 
-Types are included natively — no additional installation required.
+Written in JS with full `.d.ts` declarations. All types are exported:
 
 ```ts
-import { normalize, validate, register, createPlugin } from 'data-handlers'
-import type { Handler, ValidateResult } from 'data-handlers'
-
-const slugHandler: Handler<string> = (value) => {
-    // ...
-    return slug
-}
-
-createPlugin('slug', slugHandler)
-
-const result: ValidateResult = validate({ type: 'slug', value: 'Hello World' })
+import type {
+    Handler, TypeAccessor, HandlersProxy, ValidateResult,
+    Schema, SchemaShape, FieldConfig, SchemaParseResult,
+    NameHandlerOptions, NumberHandlerOptions, DateHandlerOptions,
+    SlugHandlerOptions, ColorHandlerOptions, RgHandlerOptions,
+} from 'data-handlers'
 ```
 
----
-
-## Project Structure
-
-```
-data-handlers
-├── handlers/
-│   ├── dateHandler.js     # Intl.DateTimeFormat wrapper
-│   ├── nameHandler.js     # Title Case normalizer
-│   └── numberHandler.js   # Intl.NumberFormat wrapper
-├── src/
-│   └── main.js            # Handler registry + formatType
-├── index.js               # Public API
-└── index.d.ts             # TypeScript types
-```
-
----
-
-## API Reference
-
-### `normalize(params)` / `validate(params)`
-
-| Parameter        | Type     | Required | Description                      |
-|------------------|----------|----------|----------------------------------|
-| `params.type`    | `string` | ✅        | Registered type identifier       |
-| `params.value`   | `any`    | ✅        | Value to process                 |
-| `params.options` | `object` | ❌        | Options forwarded to the handler |
-
-`normalize` → returns `string` or throws `TypeError`.
-`validate` → returns `{ valid, value, error }`, never throws.
-
----
-
-### `register(type, handler)` / `createPlugin(type, handler)`
-
-| Parameter | Type       | Required | Description                   |
-|-----------|------------|----------|-------------------------------|
-| `type`    | `string`   | ✅        | Type identifier to register   |
-| `handler` | `Function` | ✅        | `(value, options?) => string` |
-
-`register` → general use.
-`createPlugin` → semantic alias for plugin authors.
+JSDoc autocomplete works in plain JS via the bundled `.d.ts`.
 
 ---
 

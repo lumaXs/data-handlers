@@ -1,67 +1,71 @@
-import { nameHandler } from '../handlers/nameHandler.js'
+import { nameHandler }   from '../handlers/nameHandler.js'
 import { numberHandler } from '../handlers/numberHandler.js'
-import { dateHandler } from '../handlers/dateHandler.js'
+import { dateHandler }   from '../handlers/dateHandler.js'
 
 /**
- * Normalizes a type identifier to a lowercase trimmed string.
+ * Normaliza o identificador de tipo: trim + lowercase.
+ * Toda a API é case-insensitive por design.
+ * handlers.Name === handlers.name === handlers.NAME
  *
- * @param {string} type - The type identifier to format.
- * @returns {string} The trimmed, lowercased type string.
- * @throws {TypeError} If `type` is not a string.
- *
- * @example
- * formatType('  Name  ') // → 'name'
+ * @param {string} type
+ * @returns {string}
  */
 export const formatType = (type) => {
     if (typeof type !== 'string') {
         throw new TypeError('[normalize] Type must be a string')
     }
-
     return type.trim().toLowerCase()
 }
 
 /**
- * Registry mapping type keys to their corresponding handler functions.
- * Built-in types: `'name'`, `'number'`, `'date'`.
- * Can be extended at runtime via {@link register} or {@link createPlugin}.
- *
+ * Registry central: chave normalizada -> handler.
+ * Tipos embutidos: 'name', 'number', 'date'.
  * @type {Map<string, Function>}
  */
 export const registry = new Map([
-    ['name', nameHandler],
+    ['name',   nameHandler],
     ['number', numberHandler],
-    ['date', dateHandler],
+    ['date',   dateHandler],
 ])
 
 /**
- * Registers a custom handler for a given type.
- * Overwrites the existing handler if the type is already registered.
- *
- * @param {string} type - The type identifier to register (case-insensitive, trimmed).
- * @param {Function} handler - The handler function to associate with the type.
- * @throws {TypeError} If `handler` is not a function.
- *
- * @example
- * register('phone', (value) => value.replace(/\D/g, ''))
+ * Registra um handler para um tipo (sobrescreve se já existir).
+ * @param {string}   type
+ * @param {Function} handler
  */
 export function register(type, handler) {
     if (typeof handler !== 'function') {
         throw new TypeError('[normalize] Handler must be a function')
     }
-
-    const key = formatType(type)
-    registry.set(key, handler)
+    registry.set(formatType(type), handler)
 }
 
 /**
- * Semantic alias for {@link register}. Intended for plugin authors.
- * Prefer this when publishing a standalone `data-handlers-*` plugin.
+ * Mapeia aliases extras para o mesmo handler de um tipo já registrado.
  *
- * @type {typeof register}
+ * @param {string}    type    - Tipo principal já registrado
+ * @param {...string} aliases - Aliases adicionais
+ * @throws {TypeError} Se o tipo principal não existir
  *
  * @example
- * // inside data-handlers-cpf
- * import { createPlugin } from 'data-handlers'
- * createPlugin('cpf', cpfHandler)
+ * registerAliases('name', 'nome', 'fullName')
+ * handlers.nome.normalize('joao silva') // 'Joao Silva'
+ */
+export function registerAliases(type, ...aliases) {
+    const key = formatType(type)
+    const handler = registry.get(key)
+    if (!handler) {
+        throw new TypeError(
+            `[normalize] Cannot alias unknown type: "${key}". Register it first.`
+        )
+    }
+    for (const alias of aliases) {
+        registry.set(formatType(alias), handler)
+    }
+}
+
+/**
+ * Alias semântico de register() para autores de plugins.
+ * @type {typeof register}
  */
 export const createPlugin = register

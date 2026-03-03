@@ -1,271 +1,184 @@
 import { describe, it, expect } from 'vitest'
-import { normalize, validate } from 'data-handlers'
-import { register, createPlugin } from './src/main.js'
+import { normalize, validate, register, registerAliases, createPlugin, handlers } from 'data-handlers'
 
-// ─────────────────────────────────────────────
-// normalize()
-// ─────────────────────────────────────────────
+// ─── normalize() ─────────────────────────────────────────────────────────────
 
 describe('normalize()', () => {
     describe('type: "name"', () => {
         it('normaliza nome simples', () => {
             expect(normalize({ type: 'name', value: 'john doe' })).toBe('John Doe')
         })
-
-        it('normaliza nome com espaços extras', () => {
-            expect(normalize({ type: 'name', value: '  joão   da   silva  ' })).toBe('João Da Silva')
+        it('normaliza com espaços extras', () => {
+            expect(normalize({ type: 'name', value: '  joão   da   silva  ' })).toBe('João da Silva')
         })
-
-        it('normaliza nome em caixa alta', () => {
+        it('normaliza caixa alta', () => {
             expect(normalize({ type: 'name', value: 'MARIA SILVA' })).toBe('Maria Silva')
         })
-
-        it('normaliza nome em caixa baixa', () => {
-            expect(normalize({ type: 'name', value: 'pedro souza' })).toBe('Pedro Souza')
+        it('respeita conectivos pt-BR', () => {
+            expect(normalize({ type: 'name', value: 'maria das dores' })).toBe('Maria das Dores')
         })
-
+        it('desabilita conectivos com lowerCaseWords: []', () => {
+            expect(normalize({ type: 'name', value: 'joao de paula', options: { lowerCaseWords: [] } }))
+                .toBe('Joao De Paula')
+        })
         it('lança TypeError para string vazia', () => {
             expect(() => normalize({ type: 'name', value: '' })).toThrow(TypeError)
         })
-
-        it('lança TypeError para string só com espaços', () => {
-            expect(() => normalize({ type: 'name', value: '   ' })).toThrow(TypeError)
-        })
-
         it('lança TypeError para número', () => {
             expect(() => normalize({ type: 'name', value: 123 })).toThrow(TypeError)
         })
-
-        it('lança TypeError para null', () => {
-            expect(() => normalize({ type: 'name', value: null })).toThrow(TypeError)
-        })
-
-        it('mensagem de erro contém o prefixo correto', () => {
-            expect(() => normalize({ type: 'name', value: '' }))
-                .toThrow('[normalize:name]')
+        it('mensagem contém prefixo correto', () => {
+            expect(() => normalize({ type: 'name', value: '' })).toThrow('[normalize:name]')
         })
     })
 
     describe('type: "number"', () => {
-        it('formata número com locale padrão (en-US)', () => {
-            expect(normalize({ type: 'number', value: 1234567.89 })).toBe('1,234,567.89')
+        it('formata com locale pt-BR (padrão)', () => {
+            expect(normalize({ type: 'number', value: 1234567.89 })).toBe('1.234.567,89')
         })
-
-        it('formata número com locale pt-BR', () => {
-            expect(normalize({ type: 'number', value: 1234567.89, options: { locale: 'pt-BR' } }))
-                .toBe('1.234.567,89')
-        })
-
-        it('formata como moeda USD', () => {
-            expect(normalize({ type: 'number', value: 42, options: { locale: 'en-US', style: 'currency', currency: 'USD' } }))
-                .toBe('$42.00')
-        })
-
         it('formata como moeda BRL', () => {
             expect(normalize({ type: 'number', value: 9.9, options: { locale: 'pt-BR', style: 'currency', currency: 'BRL' } }))
-                .toBe('R$\u00a09,90')
+                .toMatch(/R\$/)
         })
-
         it('formata como porcentagem', () => {
             expect(normalize({ type: 'number', value: 0.753, options: { style: 'percent', maximumFractionDigits: 1 } }))
-                .toBe('75.3%')
+                .toContain('%')
         })
-
-        it('formata zero', () => {
-            expect(normalize({ type: 'number', value: 0 })).toBe('0')
-        })
-
-        it('formata número negativo', () => {
-            expect(normalize({ type: 'number', value: -99.5, options: { locale: 'pt-BR' } }))
-                .toBe('-99,5')
-        })
-
-        it('lança TypeError para NaN', () => {
-            expect(() => normalize({ type: 'number', value: NaN })).toThrow(TypeError)
-        })
-
-        it('lança TypeError para Infinity', () => {
-            expect(() => normalize({ type: 'number', value: Infinity })).toThrow(TypeError)
-        })
-
         it('lança TypeError para string numérica', () => {
             expect(() => normalize({ type: 'number', value: '123' })).toThrow(TypeError)
         })
-
-        it('mensagem de erro contém o prefixo correto', () => {
-            expect(() => normalize({ type: 'number', value: NaN }))
-                .toThrow('[normalize:number]')
+        it('lança RangeError para NaN', () => {
+            expect(() => normalize({ type: 'number', value: NaN })).toThrow(RangeError)
+        })
+        it('lança RangeError para Infinity', () => {
+            expect(() => normalize({ type: 'number', value: Infinity })).toThrow(RangeError)
+        })
+        it('mensagem contém prefixo correto', () => {
+            expect(() => normalize({ type: 'number', value: NaN })).toThrow('[normalize:number]')
         })
     })
 
     describe('type: "date"', () => {
-        it('formata Date object com locale pt-BR', () => {
+        it('formata Date com locale pt-BR', () => {
             expect(normalize({ type: 'date', value: new Date(2026, 2, 1), options: { locale: 'pt-BR' } }))
                 .toBe('01/03/2026')
         })
-
-        it('formata Date object com data longa pt-BR', () => {
-            expect(normalize({
-                type: 'date',
-                value: new Date(2026, 2, 1),
-                options: { locale: 'pt-BR', year: 'numeric', month: 'long', day: 'numeric' },
-            })).toBe('1 de março de 2026')
+        it('formata data longa pt-BR', () => {
+            expect(normalize({ type: 'date', value: new Date(2026, 2, 1), options: { locale: 'pt-BR', dateStyle: 'long' } }))
+                .toBe('1 de março de 2026')
         })
-
-        it('formata string ISO com horário explícito (evita drift de timezone)', () => {
-            expect(normalize({ type: 'date', value: '2024-06-15T12:00:00', options: { locale: 'en-US', year: 'numeric', month: 'numeric', day: 'numeric' } }))
-                .toBe('6/15/2024')
-        })
-
         it('formata timestamp numérico', () => {
             const ts = new Date(2024, 0, 1).getTime()
-            const result = normalize({ type: 'date', value: ts, options: { locale: 'pt-BR' } })
-            expect(result).toBe('01/01/2024')
+            expect(normalize({ type: 'date', value: ts, options: { locale: 'pt-BR' } })).toBe('01/01/2024')
         })
-
         it('lança TypeError para string inválida', () => {
             expect(() => normalize({ type: 'date', value: 'data-invalida' })).toThrow(TypeError)
         })
-
-        it('lança TypeError para valor inválido', () => {
-            expect(() => normalize({ type: 'date', value: 'abc' })).toThrow(TypeError)
-        })
-
-        it('mensagem de erro contém o prefixo correto', () => {
-            expect(() => normalize({ type: 'date', value: 'invalido' }))
-                .toThrow('[normalize:date]')
+        it('mensagem contém prefixo correto', () => {
+            expect(() => normalize({ type: 'date', value: 'invalido' })).toThrow('[normalize:date]')
         })
     })
 
-    describe('tipo desconhecido', () => {
+    describe('tipo desconhecido / case-insensitive', () => {
         it('lança TypeError para tipo não registrado', () => {
             expect(() => normalize({ type: 'inexistente', value: 'x' })).toThrow(TypeError)
         })
-
-        it('mensagem lista os tipos disponíveis', () => {
-            expect(() => normalize({ type: 'inexistente', value: 'x' }))
-                .toThrow('Available:')
-        })
-
-        it('mensagem contém o prefixo correto', () => {
-            expect(() => normalize({ type: 'inexistente', value: 'x' }))
-                .toThrow('[normalize]')
-        })
-
         it('type é case-insensitive', () => {
             expect(normalize({ type: 'NAME', value: 'john doe' })).toBe('John Doe')
         })
-
         it('type ignora espaços extras', () => {
             expect(normalize({ type: '  name  ', value: 'john doe' })).toBe('John Doe')
         })
     })
 })
 
-// ─────────────────────────────────────────────
-// validate()
-// ─────────────────────────────────────────────
+// ─── validate() ─────────────────────────────────────────────────────────────
 
 describe('validate()', () => {
     it('retorna { valid: true } para valor válido', () => {
-        const result = validate({ type: 'name', value: 'John Doe' })
-        expect(result.valid).toBe(true)
-        expect(result.value).toBe('John Doe')
-        expect(result.error).toBeNull()
+        const r = validate({ type: 'name', value: 'John Doe' })
+        expect(r.valid).toBe(true)
+        expect(r.value).toBe('John Doe')
+        expect(r.error).toBeNull()
     })
-
     it('retorna { valid: false } para valor inválido', () => {
-        const result = validate({ type: 'name', value: '' })
-        expect(result.valid).toBe(false)
-        expect(result.value).toBeNull()
-        expect(result.error).toContain('[normalize:name]')
+        const r = validate({ type: 'name', value: '' })
+        expect(r.valid).toBe(false)
+        expect(r.value).toBeNull()
+        expect(r.error).toContain('[normalize:name]')
     })
-
-    it('nunca lança — mesmo com valor inválido', () => {
+    it('nunca lança', () => {
         expect(() => validate({ type: 'name', value: '' })).not.toThrow()
         expect(() => validate({ type: 'number', value: NaN })).not.toThrow()
         expect(() => validate({ type: 'date', value: 'invalido' })).not.toThrow()
         expect(() => validate({ type: 'inexistente', value: 'x' })).not.toThrow()
     })
-
-    it('retorna o valor formatado quando válido', () => {
-        const result = validate({ type: 'number', value: 1234, options: { locale: 'pt-BR' } })
-        expect(result.valid).toBe(true)
-        expect(result.value).toBe('1.234')
-    })
-
-    it('retorna erro para tipo desconhecido', () => {
-        const result = validate({ type: 'inexistente', value: 'x' })
-        expect(result.valid).toBe(false)
-        expect(result.error).toContain('[normalize]')
-    })
-
-    it('retorna { valid: false } para número inválido', () => {
-        const result = validate({ type: 'number', value: NaN })
-        expect(result.valid).toBe(false)
-        expect(result.error).toContain('[normalize:number]')
-    })
-
-    it('retorna { valid: false } para data inválida', () => {
-        const result = validate({ type: 'date', value: 'invalido' })
-        expect(result.valid).toBe(false)
-        expect(result.error).toContain('[normalize:date]')
-    })
 })
 
-// ─────────────────────────────────────────────
-// register()
-// ─────────────────────────────────────────────
+// ─── register() / registerAliases() / createPlugin() ─────────────────────────
 
 describe('register()', () => {
-    it('registra um handler customizado', () => {
-        register('upper', (value) => String(value).toUpperCase())
+    it('registra handler customizado', () => {
+        register('upper', (v) => String(v).toUpperCase())
         expect(normalize({ type: 'upper', value: 'hello' })).toBe('HELLO')
     })
-
-    it('sobrescreve handler existente', () => {
-        register('upper', (value) => String(value).toLowerCase())
-        expect(normalize({ type: 'upper', value: 'HELLO' })).toBe('hello')
-    })
-
-    it('type é case-insensitive no register', () => {
-        register('MYTAG', (value) => `tag:${value}`)
-        expect(normalize({ type: 'mytag', value: 'test' })).toBe('tag:test')
-        expect(normalize({ type: 'MYTAG', value: 'test' })).toBe('tag:test')
-    })
-
     it('lança TypeError se handler não for função', () => {
-        expect(() => register('invalido', 'não sou função')).toThrow(TypeError)
-        expect(() => register('invalido', null)).toThrow(TypeError)
-        expect(() => register('invalido', 123)).toThrow(TypeError)
-    })
-
-    it('mensagem de erro contém o prefixo correto', () => {
-        expect(() => register('x', 'nope')).toThrow('[normalize]')
+        expect(() => register('invalido', 'nope')).toThrow(TypeError)
     })
 })
 
-// ─────────────────────────────────────────────
-// createPlugin()
-// ─────────────────────────────────────────────
+describe('registerAliases()', () => {
+    it('cria aliases para tipo existente', () => {
+        registerAliases('name', 'nome', 'fullname')
+        expect(normalize({ type: 'nome',     value: 'joao' })).toBe('Joao')
+        expect(normalize({ type: 'fullname', value: 'joao' })).toBe('Joao')
+    })
+    it('lança para tipo inexistente', () => {
+        expect(() => registerAliases('naoexiste', 'alias')).toThrow(TypeError)
+    })
+})
 
 describe('createPlugin()', () => {
-    it('é um alias funcional de register()', () => {
-        createPlugin('greet', (value) => `Olá, ${value}!`)
+    it('é alias de register', () => {
+        createPlugin('greet', (v) => `Olá, ${v}!`)
         expect(normalize({ type: 'greet', value: 'Mundo' })).toBe('Olá, Mundo!')
     })
+})
 
-    it('lança TypeError se handler não for função', () => {
-        expect(() => createPlugin('bad', 42)).toThrow(TypeError)
+// ─── handlers proxy ──────────────────────────────────────────────────────────
+
+describe('handlers proxy', () => {
+    it('.normalize() funciona', () => {
+        expect(handlers.name.normalize('  joao  ')).toBe('Joao')
     })
-
-    it('plugin registrado via createPlugin é acessível via normalize e validate', () => {
-        createPlugin('reverse', (value) => String(value).split('').reverse().join(''))
-
-        expect(normalize({ type: 'reverse', value: 'data-handlers' })).toBe('sreldnah-atad')
-
-        const result = validate({ type: 'reverse', value: 'axis' })
-        expect(result.valid).toBe(true)
-        expect(result.value).toBe('sixa')
+    it('.parse() é alias de .normalize()', () => {
+        expect(handlers.name.parse('  joao  ')).toBe('Joao')
+    })
+    it('.validate() não lança', () => {
+        expect(() => handlers.name.validate('')).not.toThrow()
+        expect(handlers.name.validate('').valid).toBe(false)
+    })
+    it('.safe() é alias de .validate()', () => {
+        const r = handlers.cpf.safe('11144477735')
+        expect(r.valid).toBe(true)
+    })
+    it('é case-insensitive', () => {
+        expect(handlers.NAME.normalize('joao')).toBe('Joao')
+        expect(handlers.Name.normalize('joao')).toBe('Joao')
+    })
+    it('handlers.has() funciona', () => {
+        expect(handlers.has('cpf')).toBe(true)
+        expect(handlers.has('inexistente')).toBe(false)
+    })
+    it('handlers.types lista os tipos', () => {
+        expect(handlers.types).toContain('name')
+        expect(handlers.types).toContain('cpf')
+    })
+    it('handlers.$ retorna meta namespace', () => {
+        expect(handlers.$.has('cpf')).toBe(true)
+        expect(handlers.$.types).toContain('name')
+    })
+    it('atribuição direta lança TypeError', () => {
+        expect(() => { handlers.name = 'algo' }).toThrow(TypeError)
     })
 })

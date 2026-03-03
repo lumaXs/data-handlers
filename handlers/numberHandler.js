@@ -1,25 +1,34 @@
 /**
- * Formats a finite number into a localized string.
+ * Formata um número finito em string localizada.
  *
- * @param {number} value - The number to format. Must be a finite number.
- * @param {Object} [options={}] - Formatting options.
- * @param {string} [options.locale='en-US'] - A BCP 47 language tag (e.g. `'pt-BR'`, `'de-DE'`).
- * @param {...Intl.NumberFormatOptions} [options] - Any additional options passed to `Intl.NumberFormat`.
- * @returns {string} The formatted number string.
- * @throws {TypeError} If `value` is not a finite number.
+ * Erros distintos e acionáveis:
+ *   TypeError  – value não é do tipo number
+ *   RangeError – value é NaN ou Infinity
+ *
+ * @param {number} value
+ * @param {{ locale?: string } & Intl.NumberFormatOptions} [options]
+ * @returns {string}
  *
  * @example
- * numberHandler(1234567.89, { locale: 'pt-BR', style: 'currency', currency: 'BRL' })
- * // → 'R$ 1.234.567,89'
+ * numberHandler(1234567.89, { style: 'currency', currency: 'BRL', locale: 'pt-BR' })
+ * // 'R$ 1.234.567,89'
+ *
+ * @example
+ * numberHandler(0.42, { style: 'percent' })
+ * // '42%'
  */
 export const numberHandler = (value, options = {}) => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
+    if (typeof value !== 'number') {
         throw new TypeError(
-            `[normalize:number] Expected finite number. Received: ${value}`
+            `[normalize:number] Expected a number. Received: ${typeof value}`
+        )
+    }
+    if (!Number.isFinite(value)) {
+        throw new RangeError(
+            `[normalize:number] Value must be a finite number. Received: ${value}`
         )
     }
 
-    const { locale = 'en-US', ...formatOptions } = options
-
+    const { locale = 'pt-BR', ...formatOptions } = options
     return new Intl.NumberFormat(locale, formatOptions).format(value)
 }

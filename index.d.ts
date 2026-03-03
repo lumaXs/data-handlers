@@ -1,75 +1,216 @@
-/**
- * A handler function responsible for validating and/or formatting a value.
- * Should throw a `TypeError` if the value is invalid.
- *
- * @template TValue - The expected input type.
- * @template TOptions - The options shape accepted by the handler.
- */
-export type Handler<TValue = unknown, TOptions = Record<string, unknown>> = (
-    value: TValue,
-    options?: TOptions
-) => string
+// ============================================================================
+// data-handlers — TypeScript Declarations
+// v2.0 | Zero dependencies | MIT
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// Core types
+// ---------------------------------------------------------------------------
 
 /**
- * Parameters accepted by `normalize()` and `validate()`.
+ * Handler function: valida e/ou normaliza um valor.
+ * Deve lançar erro descritivo quando o valor for inválido.
  */
-export interface NormalizeParams<
-    TValue = unknown,
-    TOptions = Record<string, unknown>
-> {
-    /** Registered type identifier (case-insensitive). */
-    type: string
-    /** The value to normalize or validate. */
-    value: TValue
-    /** Optional options forwarded to the handler. */
-    options?: TOptions
+export type Handler<
+    TValue  = unknown,
+    TOptions extends Record<string, unknown> = Record<string, unknown>
+> = (value: TValue, options?: TOptions) => string
+
+export interface NormalizeParams<TValue = unknown> {
+    type:     string
+    value:    TValue
+    options?: Record<string, unknown>
 }
 
-/**
- * Result returned by `validate()`.
- */
 export interface ValidateResult {
-    /** Whether the value passed handler validation. */
     valid: boolean
-    /** The formatted/normalized value, or `null` if invalid. */
     value: string | null
-    /** The error message, or `null` if valid. */
     error: string | null
 }
 
-/**
- * Normalizes a value using the handler registered for the given type.
- * Throws if the type is unknown or the value fails validation.
- */
-export function normalize<
-    TValue = unknown,
-    TOptions = Record<string, unknown>
->(params: NormalizeParams<TValue, TOptions>): string
+// ---------------------------------------------------------------------------
+// Top-level functions
+// ---------------------------------------------------------------------------
+
+/** Normaliza usando o handler do tipo. Lança se inválido. */
+export function normalize<TValue = unknown>(params: NormalizeParams<TValue>): string
+
+/** Valida sem lançar. Retorna { valid, value, error }. */
+export function validate<TValue = unknown>(params: NormalizeParams<TValue>): ValidateResult
+
+/** Registra um handler para um tipo (case-insensitive). Sobrescreve se existir. */
+export function register<TValue = unknown>(type: string, handler: Handler<TValue>): void
 
 /**
- * Validates a value against its registered handler without throwing.
- * Returns a result object with `valid`, `value`, and `error` fields.
+ * Mapeia aliases extras para o mesmo handler de um tipo já registrado.
+ * @example
+ * registerAliases('name', 'nome', 'fullName')
  */
-export function validate<
-    TValue = unknown,
-    TOptions = Record<string, unknown>
->(params: NormalizeParams<TValue, TOptions>): ValidateResult
+export function registerAliases(type: string, ...aliases: string[]): void
+
+/** Alias semântico de register() para autores de plugins. */
+export declare const createPlugin: typeof register
+
+// ---------------------------------------------------------------------------
+// handlers proxy
+// ---------------------------------------------------------------------------
+
+export interface TypeAccessor {
+    /** Normaliza — lança se inválido */
+    normalize(value: unknown, options?: Record<string, unknown>): string
+    /** Valida sem lançar */
+    validate(value: unknown, options?: Record<string, unknown>): ValidateResult
+    /** Alias de normalize (Zod-style .parse) */
+    parse(value: unknown, options?: Record<string, unknown>): string
+    /** Alias de validate (Zod-style .safe) */
+    safe(value: unknown, options?: Record<string, unknown>): ValidateResult
+}
+
+export interface HandlersMeta {
+    /** Todos os tipos registrados no momento da chamada */
+    readonly types: string[]
+    /** Verifica se um tipo existe (case-insensitive) */
+    has(type: string): boolean
+}
+
+export type HandlersProxy = {
+    /** Namespace meta: handlers.$.types, handlers.$.has('cpf') */
+    readonly $: HandlersMeta
+    readonly types: string[]
+    has(type: string): boolean
+} & Record<string, TypeAccessor>
 
 /**
- * Registers a custom handler for a given type.
- * Overwrites the existing handler if the type is already registered.
- */
-export function register<
-    TValue = unknown,
-    TOptions = Record<string, unknown>
->(type: string, handler: Handler<TValue, TOptions>): void
-
-/**
- * Semantic alias for `register()`. Intended for plugin authors.
+ * Proxy fluente e case-insensitive para todos os handlers registrados.
  *
  * @example
- * // inside data-handlers-cpf
- * import { createPlugin } from 'data-handlers'
- * createPlugin('cpf', cpfHandler)
+ * handlers.name.normalize('  joao  ')      // 'Joao'
+ * handlers.name.parse('  joao  ')          // alias
+ * handlers.cpf.safe('111.444.777-35')      // { valid: true, ... }
+ * handlers.has('cpf')                      // true
+ * handlers.types                           // ['name', 'number', ...]
+ * handlers.$.types                         // meta namespace
  */
-export declare const createPlugin: typeof register
+export declare const handlers: HandlersProxy
+
+// ---------------------------------------------------------------------------
+// Schema system
+// ---------------------------------------------------------------------------
+
+export interface FieldConfig {
+    /** Tipo registrado (ex: 'name', 'cpf', 'number') */
+    type:      string
+    /** Se true, null/undefined é aceito sem erro */
+    optional?: boolean
+    /** Valor padrão quando o campo for undefined */
+    default?:  unknown
+    /** Opções repassadas ao handler */
+    options?:  Record<string, unknown>
+    /** Rótulo legível para mensagens de erro */
+    label?:    string
+}
+
+export type SchemaShape = Record<string, string | FieldConfig>
+
+export interface SchemaParseResult<T = Record<string, unknown>> {
+    success: boolean
+    data:    T | null
+    errors:  Record<string, string> | null
+}
+
+export interface Schema<TShape extends SchemaShape = SchemaShape> {
+    /** Normaliza e retorna o objeto. Lança SchemaError se inválido. */
+    parse(input: unknown): Record<string, unknown>
+    /** Normaliza sem lançar. Retorna { success, data, errors }. */
+    safeParse(input: unknown): SchemaParseResult
+    /** Estende o schema com campos adicionais (imutável — retorna novo schema). */
+    extend(extra: SchemaShape): Schema
+    /** Retorna novo schema com apenas os campos especificados. */
+    pick(...keys: string[]): Schema
+    /** Retorna novo schema sem os campos especificados. */
+    omit(...keys: string[]): Schema
+    /** Retorna novo schema com todos os campos como optional. */
+    partial(): Schema
+    /** Mapa dos campos resolvidos */
+    readonly fields: Record<string, FieldConfig>
+}
+
+/**
+ * Cria um schema de validação/normalização de objetos.
+ *
+ * @example
+ * const userSchema = schema({
+ *   name:     'name',
+ *   document: 'cpf',
+ *   phone:    { type: 'phone', optional: true },
+ *   amount:   { type: 'number', options: { style: 'currency', currency: 'BRL', locale: 'pt-BR' } }
+ * })
+ *
+ * userSchema.parse({ name: 'JOAO SILVA', document: '11144477735', amount: 99.9 })
+ * // { name: 'Joao Silva', document: '111.444.777-35', amount: 'R$ 99,90' }
+ */
+export function schema(shape: SchemaShape): Schema
+
+/**
+ * Erro lançado por schema.parse() quando a validação falha.
+ * Contém `.errors` com o mapa campo → mensagem.
+ *
+ * @example
+ * try {
+ *   userSchema.parse({ name: '' })
+ * } catch (err) {
+ *   if (err instanceof SchemaError) console.log(err.errors)
+ * }
+ */
+export declare class SchemaError extends Error {
+    errors: Record<string, string>
+    constructor(errors: Record<string, string>)
+}
+
+// ---------------------------------------------------------------------------
+// Handler option types
+// ---------------------------------------------------------------------------
+
+export interface NameHandlerOptions {
+    /** Palavras a manter em minúsculo. Passe [] para desabilitar. */
+    lowerCaseWords?: string[]
+}
+
+export interface NumberHandlerOptions extends Intl.NumberFormatOptions {
+    /** BCP 47 locale. @default 'pt-BR' */
+    locale?: string
+}
+
+export interface DateHandlerOptions extends Intl.DateTimeFormatOptions {
+    /** BCP 47 locale. @default 'pt-BR' */
+    locale?: string
+}
+
+export type DateInput = Date | string | number
+
+export interface SlugHandlerOptions {
+    /** Separador usado entre palavras. @default '-' */
+    separator?: string
+}
+
+export interface ColorHandlerOptions {
+    /** Formato de saída. @default 'hex' */
+    format?: 'hex' | 'hex-upper' | 'rgb' | 'rgb-object'
+}
+
+export interface RgHandlerOptions {
+    /** Formato de saída. @default 'sp' */
+    format?: 'sp' | 'digits'
+}
+
+export interface EmailHandlerOptions {
+    /** Se true, preserva capitalização original. @default false */
+    caseSensitive?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Internal (uso avançado)
+// ---------------------------------------------------------------------------
+
+export declare const registry: Map<string, Handler>
+export declare function formatType(type: string): string
