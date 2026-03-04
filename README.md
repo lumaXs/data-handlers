@@ -10,7 +10,7 @@
 [![license](https://img.shields.io/npm/l/data-handlers)](./LICENSE)
 [![node](https://img.shields.io/node/v/data-handlers)](./package.json)
 
-📦 [npmjs.com/package/data-handlers](https://www.npmjs.com/package/data-handlers) · 📖 [Documentation](https://lumaxs.github.io/data-handlers/)
+📦 [npmjs.com](https://www.npmjs.com/package/data-handlers) · 📖 [Documentation](https://lumaxs.github.io/data-handlers/)
 
 ---
 
