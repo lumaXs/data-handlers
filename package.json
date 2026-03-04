@@ -53,7 +53,7 @@
     "brasil"
   ],
   "author": "Emersom Oliveira",
-  "license": "./LICENSE",
+  "license": "MIT",
   "engines": {
     "node": ">=18"
   },

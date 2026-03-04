@@ -99,9 +99,113 @@ tr:hover td{background:rgba(255,255,255,.02)}
 /* ── DIVIDER ── */
 hr{border:none;border-top:1px solid var(--b);margin:32px 0}
 
+/* ── HEADER ACTIONS ── */
+.header-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.npm-link,.gh-link{display:flex;align-items:center;gap:4px;color:var(--m);text-decoration:none;font-size:11px;padding:3px 8px;border:1px solid var(--b);border-radius:10px;background:#1a1f27;transition:all .12s;white-space:nowrap}
+.npm-link:hover{color:#e2473f;border-color:#e2473f}
+.gh-link:hover{color:var(--t);border-color:var(--m)}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--b);padding:24px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:#0a0d12}
+.footer-left{font-size:12px;color:#3d444d}
+.footer-left strong{color:var(--m)}
+.footer-links{display:flex;gap:16px}
+.footer-links a{font-size:12px;color:#3d444d;text-decoration:none;transition:color .12s}
+.footer-links a:hover{color:var(--a)}
+
 /* ── ANCHOR ── */
 .anchor{color:var(--m);text-decoration:none;margin-left:6px;opacity:0;transition:opacity .12s;font-size:14px}
 h2:hover .anchor{opacity:1}
+
+/* ── TABLE SCROLL WRAPPER ── */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:20px}
+.table-wrap table{margin-bottom:0}
+
+/* ── HAMBURGER ── */
+.nav-toggle{display:none;background:transparent;border:1px solid var(--b);color:var(--m);padding:5px 10px;border-radius:5px;cursor:pointer;font-size:16px;line-height:1;margin-left:auto}
+.nav-toggle:hover{color:var(--t);border-color:var(--a)}
+
+/* ── OVERLAY ── */
+.nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;backdrop-filter:blur(2px)}
+.nav-overlay.open{display:block}
+
+/* ── DESKTOP WIDE — centraliza em telas muito largas ── */
+@media(min-width:1400px){
+  .layout{max-width:1400px;margin:0 auto}
+  main{max-width:1000px}
+}
+
+/* ── TABLET ── */
+@media(max-width:1024px){
+  header{padding:20px 24px 16px}
+  main{padding:24px 28px}
+}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  /* Header compacto */
+  header{padding:14px 16px;position:sticky;top:0;z-index:100}
+  .header-inner{gap:10px}
+  header h1{font-size:17px}
+  .badges{gap:4px;margin-top:8px}
+  .badge{font-size:10px;padding:2px 7px}
+  .nav-toggle{display:block}
+
+  /* Nav: drawer lateral */
+  .layout{display:block}
+  nav{
+    position:fixed;
+    top:0;left:-100%;
+    width:75%;max-width:260px;
+    height:100vh;
+    z-index:95;
+    background:#0d1117;
+    border-right:1px solid var(--b);
+    transition:left .25s ease;
+    padding-top:100px;
+    overflow-y:auto;
+    box-shadow:4px 0 24px rgba(0,0,0,.6);
+  }
+  nav.open{left:0}
+
+  /* Main ocupa tudo */
+  main{
+    padding:20px 16px;
+    max-width:100%;
+  }
+
+  /* Títulos menores */
+  h2{font-size:15px;margin:28px 0 12px}
+
+  /* Código: fonte menor pra caber */
+  pre{font-size:11.5px;padding:14px}
+  .ch{padding:8px 12px}
+  .label{font-size:11px}
+
+  /* Grid: 1 coluna */
+  .grid{grid-template-columns:1fr 1fr}
+
+  /* Tabelas: scroll horizontal */
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  th,td{padding:8px 12px}
+
+  /* Notes */
+  .note,.warn,.tip{font-size:12px;padding:10px 12px}
+
+  /* Botão copiar sempre visível */
+  .cb{padding:3px 9px}
+}
+
+@media(max-width:420px){
+  .grid{grid-template-columns:1fr}
+  pre{font-size:11px}
+}
+@media(max-width:480px){
+  .npm-link,.gh-link{display:none}
+}
+@media(max-width:768px){
+  footer{padding:16px;flex-direction:column;align-items:flex-start;gap:10px}
+}
 </style>
 </head>
 <body>
@@ -110,6 +214,17 @@ h2:hover .anchor{opacity:1}
   <div class="header-inner">
     <h1><span>data-handlers</span></h1>
     <span class="ver">v1.0</span>
+    <div class="header-actions">
+      <a class="npm-link" href="https://www.npmjs.com/package/data-handlers" target="_blank" rel="noopener" title="npm">
+        <svg width="14" height="14" viewBox="0 0 18 7" fill="currentColor"><path d="M0 0h18v6H9V7H5V6H0V0zm1 5h2V1H1v4zm3-4v5h2V5h2V1H4zm5 0v4h2V1h-2zm3 0v4h4V1h-4zm1 1h2v2h-2V2z"/></svg>
+        npm
+      </a>
+      <a class="gh-link" href="https://github.com/lumaxs/data-handlers" target="_blank" rel="noopener" title="GitHub">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.74-1.33-1.74-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12C24 5.37 18.63 0 12 0z"/></svg>
+        GitHub
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+    </div>
   </div>
   <div class="badges">
     <span class="badge">Zero deps</span>
@@ -121,6 +236,8 @@ h2:hover .anchor{opacity:1}
     <span class="badge">Node ≥ 18</span>
   </div>
 </header>
+
+<div class="nav-overlay" id="navOverlay"></div>
 
 <div class="layout">
 <nav id="nav">
@@ -552,12 +669,12 @@ handlers.slug.normalize(<span class="str">'Meu Post Incrível'</span>, { separat
 
 <div class="card">
 <div class="ch"><span class="label">email</span><button class="cb" onclick="cp(this)">Copiar</button></div>
-<pre>handlers.email.normalize(<span class="str">'  USER@EMPRESA.COM.BR  '</span>)  <span class="cm">// 'user@empresa.com.br'</span>
-handlers.email.normalize(<span class="str">'joao@empresa.com.br'</span>)      <span class="cm">// 'joao@empresa.com.br'</span>
+<pre>handlers.email.normalize(<span class="str">'  <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="194c4a5c4b595c54494b5c4a58375a5654375b4b">[email&#160;protected]</a>  '</span>)  <span class="cm">// '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="84f1f7e1f6c4e1e9f4f6e1f7e5aae7ebe9aae6f6">[email&#160;protected]</a>'</span>
+handlers.email.normalize(<span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="adc7c2ccc2edc8c0dddfc8decc83cec2c083cfdf">[email&#160;protected]</a>'</span>)      <span class="cm">// '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e58f8a848aa580889597809684cb868a88cb8797">[email&#160;protected]</a>'</span>
 
 handlers.email.safe(<span class="str">'invalido'</span>)      <span class="cm">// { valid: false, ... }</span>
 handlers.email.safe(<span class="str">'sem@dominio'</span>)   <span class="cm">// { valid: false, ... }</span>
-handlers.email.safe(<span class="str">'ok@teste.com'</span>)  <span class="cm">// { valid: true, value: 'ok@teste.com', ... }</span></pre>
+handlers.email.safe(<span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6e01052e1a0b1d1a0b400d0103">[email&#160;protected]</a>'</span>)  <span class="cm">// { valid: true, value: '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="690602291d0c1a1d0c470a0604">[email&#160;protected]</a>', ... }</span></pre>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -606,7 +723,7 @@ handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span cla
   name:     <span class="str">'JOAO SILVA'</span>,
   document: <span class="str">'11144477735'</span>,
   phone:    <span class="str">'11987654321'</span>,
-  email:    <span class="str">'joao@empresa.com'</span>,
+  email:    <span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="12787d737d52777f62607761733c717d7f">[email&#160;protected]</a>'</span>,
 })
 
 <span class="cm">// dados →</span>
@@ -614,7 +731,7 @@ handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span cla
 <span class="cm">//   name:     'Joao Silva',</span>
 <span class="cm">//   document: '111.444.777-35',</span>
 <span class="cm">//   phone:    '(11) 98765-4321',</span>
-<span class="cm">//   email:    'joao@empresa.com'</span>
+<span class="cm">//   email:    '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3d57525c527d58504d4f584e5c135e5250">[email&#160;protected]</a>'</span>
 <span class="cm">// }</span></pre>
 </div>
 
@@ -933,24 +1050,44 @@ s.extend({ x: <span class="str">'slug'</span> }) <span class="cm">// adiciona ca
 <span class="cm">// ── Extensão ─────────────────────────────────────────────────────────────</span>
 register(<span class="str">'tipo'</span>, handler)                 <span class="cm">// registra handler customizado</span>
 registerAliases(<span class="str">'name'</span>, <span class="str">'nome'</span>, <span class="str">'fullName'</span>) <span class="cm">// múltiplos nomes pro mesmo handler</span>
-createPlugin(<span class="str">'tipo'</span>, handler)              <span class="cm">// alias de register(), para plugins</span></pre>
+createPlugin(<span class="str">'tipo'</span>, handler)              <span class="cm">// alias de register()</pre>
 </div>
 
 </main>
 </div>
 
 <script>
+// ── Copy button ──────────────────────────────────────────────────────────────
 function cp(btn) {
     const pre = btn.closest('.card').querySelector('pre')
-    const text = pre.innerText
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(pre.innerText).then(() => {
         btn.textContent = 'Copiado!'
         btn.style.color = '#3fb950'
         setTimeout(() => { btn.textContent = 'Copiar'; btn.style.color = '' }, 1800)
     })
 }
 
-// Active nav highlight
+
+// ── Mobile nav drawer ────────────────────────────────────────────────────────
+const nav     = document.getElementById('nav')
+const toggle  = document.getElementById('navToggle')
+const overlay = document.getElementById('navOverlay')
+
+function openNav()  { nav.classList.add('open'); overlay.classList.add('open'); document.body.style.overflow='hidden'; toggle.textContent='✕' }
+function closeNav() { nav.classList.remove('open'); overlay.classList.remove('open'); document.body.style.overflow=''; toggle.textContent='☰' }
+
+toggle.addEventListener('click', () => {
+    if (nav.classList.contains('open')) { closeNav() } else { openNav() }
+})
+overlay.addEventListener('click', closeNav)
+
+nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+    if (window.innerWidth <= 768) closeNav()
+}))
+
+window.addEventListener('resize', () => { if (window.innerWidth > 768) closeNav() })
+
+// ── Active nav highlight ──────────────────────────────────────────────────────
 const sections = document.querySelectorAll('h2[id]')
 const links    = document.querySelectorAll('nav a')
 
@@ -966,5 +1103,17 @@ const observer = new IntersectionObserver(entries => {
 
 sections.forEach(s => observer.observe(s))
 </script>
+<footer>
+  <div class="footer-left">
+    <strong>data-handlers</strong> &nbsp;·&nbsp; &copy; 2026 <a href="https://github.com/lumaxs" target="_blank" rel="noopener" style="color:var(--m);text-decoration:none">lumaxs</a> &nbsp;·&nbsp; MIT License
+  </div>
+  <div class="footer-links">
+    <a href="https://www.npmjs.com/package/data-handlers" target="_blank" rel="noopener">npm</a>
+    <a href="https://github.com/lumaxs/data-handlers" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/lumaxs/data-handlers/blob/main/README.md" target="_blank" rel="noopener">README</a>
+    <a href="https://github.com/lumaxs/data-handlers/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+
 </body>
 </html>
