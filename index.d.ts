@@ -12,20 +12,20 @@
  * Deve lançar erro descritivo quando o valor for inválido.
  */
 export type Handler<
-    TValue  = unknown,
-    TOptions extends Record<string, unknown> = Record<string, unknown>
+  TValue = unknown,
+  TOptions extends Record<string, unknown> = Record<string, unknown>
 > = (value: TValue, options?: TOptions) => string
 
 export interface NormalizeParams<TValue = unknown> {
-    type:     string
-    value:    TValue
-    options?: Record<string, unknown>
+  type: string
+  value: TValue
+  options?: Record<string, unknown>
 }
 
 export interface ValidateResult {
-    valid: boolean
-    value: string | null
-    error: string | null
+  valid: boolean
+  value: string | null
+  error: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -56,28 +56,28 @@ export declare const createPlugin: typeof register
 // ---------------------------------------------------------------------------
 
 export interface TypeAccessor {
-    /** Normaliza — lança se inválido */
-    normalize(value: unknown, options?: Record<string, unknown>): string
-    /** Valida sem lançar */
-    validate(value: unknown, options?: Record<string, unknown>): ValidateResult
-    /** Alias de normalize (Zod-style .parse) */
-    parse(value: unknown, options?: Record<string, unknown>): string
-    /** Alias de validate (Zod-style .safe) */
-    safe(value: unknown, options?: Record<string, unknown>): ValidateResult
+  /** Normaliza — lança se inválido */
+  normalize(value: unknown, options?: Record<string, unknown>): string
+  /** Valida sem lançar */
+  validate(value: unknown, options?: Record<string, unknown>): ValidateResult
+  /** Alias de normalize (Zod-style .parse) */
+  parse(value: unknown, options?: Record<string, unknown>): string
+  /** Alias de validate (Zod-style .safe) */
+  safe(value: unknown, options?: Record<string, unknown>): ValidateResult
 }
 
 export interface HandlersMeta {
-    /** Todos os tipos registrados no momento da chamada */
-    readonly types: string[]
-    /** Verifica se um tipo existe (case-insensitive) */
-    has(type: string): boolean
+  /** Todos os tipos registrados no momento da chamada */
+  readonly types: string[]
+  /** Verifica se um tipo existe (case-insensitive) */
+  has(type: string): boolean
 }
 
 export type HandlersProxy = {
-    /** Namespace meta: handlers.$.types, handlers.$.has('cpf') */
-    readonly $: HandlersMeta
-    readonly types: string[]
-    has(type: string): boolean
+  /** Namespace meta: handlers.$.types, handlers.$.has('cpf') */
+  readonly $: HandlersMeta
+  readonly types: string[]
+  has(type: string): boolean
 } & Record<string, TypeAccessor>
 
 /**
@@ -98,41 +98,39 @@ export declare const handlers: HandlersProxy
 // ---------------------------------------------------------------------------
 
 export interface FieldConfig {
-    /** Tipo registrado (ex: 'name', 'cpf', 'number') */
-    type:      string
-    /** Se true, null/undefined é aceito sem erro */
-    optional?: boolean
-    /** Valor padrão quando o campo for undefined */
-    default?:  unknown
-    /** Opções repassadas ao handler */
-    options?:  Record<string, unknown>
-    /** Rótulo legível para mensagens de erro */
-    label?:    string
+  /** Tipo registrado (ex: 'name', 'cpf', 'number') */
+  type: string
+  /** Se true, null/undefined é aceito sem erro */
+  optional?: boolean
+  /** Valor padrão quando o campo for undefined */
+  default?: unknown
+  /** Opções repassadas ao handler */
+  options?: Record<string, unknown>
+  /** Rótulo legível para mensagens de erro */
+  label?: string
 }
 
 export type SchemaShape = Record<string, string | FieldConfig>
 
-export interface SchemaParseResult<T = Record<string, unknown>> {
-    success: boolean
-    data:    T | null
-    errors:  Record<string, string> | null
-}
+export type SchemaParseResult<T = Record<string, string>> =
+  | { success: true; data: T; errors: null }
+  | { success: false; data: null; errors: Record<string, string> }
 
 export interface Schema<TShape extends SchemaShape = SchemaShape> {
-    /** Normaliza e retorna o objeto. Lança SchemaError se inválido. */
-    parse(input: unknown): Record<string, unknown>
-    /** Normaliza sem lançar. Retorna { success, data, errors }. */
-    safeParse(input: unknown): SchemaParseResult
-    /** Estende o schema com campos adicionais (imutável — retorna novo schema). */
-    extend(extra: SchemaShape): Schema
-    /** Retorna novo schema com apenas os campos especificados. */
-    pick(...keys: string[]): Schema
-    /** Retorna novo schema sem os campos especificados. */
-    omit(...keys: string[]): Schema
-    /** Retorna novo schema com todos os campos como optional. */
-    partial(): Schema
-    /** Mapa dos campos resolvidos */
-    readonly fields: Record<string, FieldConfig>
+  /** Normaliza e retorna o objeto. Lança SchemaError se inválido. */
+  parse(input: unknown): Record<string, unknown>
+  /** Normaliza sem lançar. Retorna { success, data, errors }. */
+  safeParse(input: unknown): SchemaParseResult
+  /** Estende o schema com campos adicionais (imutável — retorna novo schema). */
+  extend(extra: SchemaShape): Schema
+  /** Retorna novo schema com apenas os campos especificados. */
+  pick(...keys: string[]): Schema
+  /** Retorna novo schema sem os campos especificados. */
+  omit(...keys: string[]): Schema
+  /** Retorna novo schema com todos os campos como optional. */
+  partial(): Schema
+  /** Mapa dos campos resolvidos */
+  readonly fields: Record<string, FieldConfig>
 }
 
 /**
@@ -163,8 +161,8 @@ export function schema(shape: SchemaShape): Schema
  * }
  */
 export declare class SchemaError extends Error {
-    errors: Record<string, string>
-    constructor(errors: Record<string, string>)
+  errors: Record<string, string>
+  constructor(errors: Record<string, string>)
 }
 
 // ---------------------------------------------------------------------------
@@ -172,40 +170,40 @@ export declare class SchemaError extends Error {
 // ---------------------------------------------------------------------------
 
 export interface NameHandlerOptions {
-    /** Palavras a manter em minúsculo. Passe [] para desabilitar. */
-    lowerCaseWords?: string[]
+  /** Palavras a manter em minúsculo. Passe [] para desabilitar. */
+  lowerCaseWords?: string[]
 }
 
 export interface NumberHandlerOptions extends Intl.NumberFormatOptions {
-    /** BCP 47 locale. @default 'pt-BR' */
-    locale?: string
+  /** BCP 47 locale. @default 'pt-BR' */
+  locale?: string
 }
 
 export interface DateHandlerOptions extends Intl.DateTimeFormatOptions {
-    /** BCP 47 locale. @default 'pt-BR' */
-    locale?: string
+  /** BCP 47 locale. @default 'pt-BR' */
+  locale?: string
 }
 
 export type DateInput = Date | string | number
 
 export interface SlugHandlerOptions {
-    /** Separador usado entre palavras. @default '-' */
-    separator?: string
+  /** Separador usado entre palavras. @default '-' */
+  separator?: string
 }
 
 export interface ColorHandlerOptions {
-    /** Formato de saída. @default 'hex' */
-    format?: 'hex' | 'hex-upper' | 'rgb' | 'rgb-object'
+  /** Formato de saída. @default 'hex' */
+  format?: 'hex' | 'hex-upper' | 'rgb' | 'rgb-object'
 }
 
 export interface RgHandlerOptions {
-    /** Formato de saída. @default 'sp' */
-    format?: 'sp' | 'digits'
+  /** Formato de saída. @default 'sp' */
+  format?: 'sp' | 'digits'
 }
 
 export interface EmailHandlerOptions {
-    /** Se true, preserva capitalização original. @default false */
-    caseSensitive?: boolean
+  /** Se true, preserva capitalização original. @default false */
+  caseSensitive?: boolean
 }
 
 // ---------------------------------------------------------------------------
