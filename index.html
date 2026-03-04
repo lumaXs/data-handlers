@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>data-handlers — Documentação</title>
+<style>
+:root {
+  --bg:#0d1117;--s:#161b22;--b:#30363d;--t:#e6edf3;--m:#8b949e;
+  --a:#58a6ff;--g:#3fb950;--y:#d29922;--r:#f85149;--pu:#bc8cff;
+  --code-bg:#161b22;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--t);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6}
+
+/* ── HEADER ── */
+header{padding:32px 40px 24px;border-bottom:1px solid var(--b);background:#0d1117;position:sticky;top:0;z-index:100}
+.header-inner{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:20px;font-weight:700;color:var(--t);letter-spacing:-.3px}
+header h1 span{color:var(--a)}
+.ver{font-size:11px;background:#1f2937;border:1px solid var(--b);border-radius:10px;padding:2px 8px;color:var(--m);font-weight:400}
+.badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.badge{display:inline-block;background:#1a2332;border:1px solid #2d3f55;border-radius:10px;font-size:11px;padding:2px 9px;color:#79afd4}
+
+/* ── LAYOUT ── */
+.layout{display:flex;min-height:calc(100vh - 89px)}
+
+/* ── NAV ── */
+nav{width:220px;flex-shrink:0;padding:20px 0;position:sticky;top:89px;height:calc(100vh - 89px);overflow-y:auto;border-right:1px solid var(--b)}
+nav::-webkit-scrollbar{width:3px}
+nav::-webkit-scrollbar-thumb{background:var(--b)}
+nav a{display:block;padding:5px 20px;color:var(--m);text-decoration:none;font-size:12.5px;border-left:2px solid transparent;transition:all .12s}
+nav a:hover{color:var(--t);border-left-color:var(--b)}
+nav a.active{color:var(--a);border-left-color:var(--a);background:rgba(88,166,255,.05)}
+nav .sec{padding:14px 20px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#3d444d;font-weight:600}
+
+/* ── MAIN ── */
+main{flex:1;padding:32px 48px;max-width:900px;min-width:0}
+
+/* ── TYPOGRAPHY ── */
+h2{font-size:17px;font-weight:600;margin:40px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--b);color:var(--t);display:flex;align-items:center;gap:8px}
+h2::before{content:'';display:inline-block;width:3px;height:16px;background:var(--a);border-radius:2px}
+h3{font-size:14px;font-weight:600;margin:24px 0 10px;color:#cdd9e5}
+p{color:#adbac7;margin-bottom:12px;line-height:1.7}
+strong{color:var(--t)}
+
+/* ── CARDS DE CÓDIGO ── */
+.card{background:var(--s);border:1px solid var(--b);border-radius:8px;margin-bottom:20px;overflow:hidden}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--b);background:#0d1117;gap:10px;flex-wrap:wrap}
+.ch-left{display:flex;align-items:center;gap:8px}
+.label{font-family:'SF Mono',Consolas,monospace;font-size:12px;color:var(--a)}
+.tag{font-size:10px;background:#2d333b;border:1px solid var(--b);padding:2px 7px;border-radius:4px;color:var(--m)}
+.tag.green{background:#1a2e1a;border-color:#2d4a2d;color:var(--g)}
+.tag.blue{background:#1a2a3a;border-color:#2d4060;color:var(--a)}
+.tag.yellow{background:#2a2010;border-color:#4a3a10;color:var(--y)}
+.cb{background:transparent;border:1px solid var(--b);color:var(--m);padding:3px 12px;border-radius:4px;cursor:pointer;font-size:11px;transition:all .12s;white-space:nowrap}
+.cb:hover{color:var(--t);border-color:var(--a)}
+pre{margin:0;padding:20px;overflow-x:auto;font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:12.5px;line-height:1.7;tab-size:2}
+
+/* ── INLINE CODE ── */
+code{background:#2d333b;border:1px solid var(--b);border-radius:4px;padding:1px 6px;font-family:'SF Mono',Consolas,monospace;font-size:12px;color:#e2c48a}
+
+/* ── NOTA / ALERTA ── */
+.note{background:#1c2128;border-left:3px solid var(--a);padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:16px;font-size:13px;color:#8b9eb5;line-height:1.6}
+.note strong{color:var(--a)}
+.warn{background:#1f1a0e;border-left:3px solid var(--y);padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:16px;font-size:13px;color:#9b8a5e;line-height:1.6}
+.warn strong{color:var(--y)}
+.tip{background:#0f1f10;border-left:3px solid var(--g);padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:16px;font-size:13px;color:#6a9b72;line-height:1.6}
+.tip strong{color:var(--g)}
+
+/* ── GRID DE RESUMO ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:28px}
+.sc{background:var(--s);border:1px solid var(--b);border-radius:7px;padding:14px 16px;transition:border-color .15s}
+.sc:hover{border-color:#3d4f63}
+.sc h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--a);margin:0 0 10px;font-weight:600}
+.sc ul{list-style:none}
+.sc li{font-size:12px;color:var(--m);padding:2px 0;display:flex;align-items:baseline;gap:5px}
+.sc li::before{content:'+';color:var(--g);font-weight:700;flex-shrink:0}
+
+/* ── TABELA ── */
+table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}
+th{text-align:left;padding:8px 14px;color:var(--m);border-bottom:1px solid var(--b);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+td{padding:9px 14px;border-bottom:1px solid #21262d;color:#adbac7;vertical-align:top}
+td:first-child{font-family:'SF Mono',Consolas,monospace;font-size:12px;color:var(--a);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ── SYNTAX HIGHLIGHT (manual) ── */
+.kw{color:#f47067}       /* keywords */
+.fn{color:#dcbdfb}       /* functions */
+.str{color:#96d0ff}      /* strings */
+.cm{color:#636e7b;font-style:italic} /* comments */
+.num{color:#6cb6ff}      /* numbers */
+.cls{color:#f69d50}      /* class names */
+.op{color:#f47067}       /* operators */
+.prop{color:#6cb6ff}     /* properties */
+
+/* ── DIVIDER ── */
+hr{border:none;border-top:1px solid var(--b);margin:32px 0}
+
+/* ── ANCHOR ── */
+.anchor{color:var(--m);text-decoration:none;margin-left:6px;opacity:0;transition:opacity .12s;font-size:14px}
+h2:hover .anchor{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <h1><span>data-handlers</span></h1>
+    <span class="ver">v1.0</span>
+  </div>
+  <div class="badges">
+    <span class="badge">Zero deps</span>
+    <span class="badge">pt-BR first</span>
+    <span class="badge">CPF · CNPJ · CEP · Telefone · RG</span>
+    <span class="badge">Schema system</span>
+    <span class="badge">Proxy fluente</span>
+    <span class="badge">TypeScript</span>
+    <span class="badge">Node ≥ 18</span>
+  </div>
+</header>
+
+<div class="layout">
+<nav id="nav">
+  <div class="sec">Início</div>
+  <a href="#intro">O que é</a>
+  <a href="#install">Instalação</a>
+  <a href="#conceito">Conceito central</a>
+  <div class="sec">Funções base</div>
+  <a href="#normalize">normalize()</a>
+  <a href="#validate">validate()</a>
+  <div class="sec">handlers proxy</div>
+  <a href="#handlers">Uso fluente</a>
+  <a href="#introspect">Introspecção</a>
+  <div class="sec">Handlers</div>
+  <a href="#name">name</a>
+  <a href="#number">number</a>
+  <a href="#date">date</a>
+  <div class="sec">Plugins BR</div>
+  <a href="#cpf">cpf</a>
+  <a href="#cnpj">cnpj</a>
+  <a href="#cep">cep</a>
+  <a href="#phone">phone</a>
+  <a href="#rg">rg</a>
+  <a href="#slug">slug</a>
+  <a href="#email">email</a>
+  <a href="#color">color</a>
+  <div class="sec">Schemas</div>
+  <a href="#schema-intro">Introdução</a>
+  <a href="#schema-parse">parse e safeParse</a>
+  <a href="#schema-fields">Opções de campo</a>
+  <a href="#schema-utils">Utilitários</a>
+  <a href="#schema-error">SchemaError</a>
+  <div class="sec">Extensões</div>
+  <a href="#register">register()</a>
+  <a href="#aliases">registerAliases()</a>
+  <a href="#plugin">createPlugin()</a>
+  <div class="sec">Padrões reais</div>
+  <a href="#pattern-api">Endpoint REST</a>
+  <a href="#pattern-form">Formulário</a>
+  <a href="#pattern-display">Exibição</a>
+  <a href="#pattern-patch">PATCH parcial</a>
+  <div class="sec">Referência</div>
+  <a href="#cheatsheet">Cheatsheet</a>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="intro">O que é <a class="anchor" href="#intro">#</a></h2>
+
+<p><strong>data-handlers</strong> é uma biblioteca de normalização e validação de dados — sem dependências externas, com suporte nacional de primeira classe e um sistema de schemas para validar objetos inteiros.</p>
+
+<p>Você provavelmente já escreveu código assim em vários lugares do seu sistema:</p>
+
+<div class="card">
+<div class="ch"><span class="label">Sem data-handlers — espalhado, inconsistente</span></div>
+<pre><span class="cm">// Em algum lugar do projeto...</span>
+<span class="kw">const</span> nome = input.trim().toLowerCase().replace(<span class="str">/\s+/g</span>, <span class="str">' '</span>)
+  .split(<span class="str">' '</span>).map(w => w[<span class="num">0</span>].toUpperCase() + w.slice(<span class="num">1</span>)).join(<span class="str">' '</span>)
+
+<span class="cm">// Em outro lugar...</span>
+<span class="kw">const</span> cpf = raw.replace(<span class="str">/\D/g</span>, <span class="str">''</span>)
+  .replace(<span class="str">/(\d{3})(\d{3})(\d{3})(\d{2})/</span>, <span class="str">'$1.$2.$3-$4'</span>)
+<span class="kw">if</span> (!cpfRegex.test(cpf)) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">'CPF inválido'</span>)
+
+<span class="cm">// E em outro...</span>
+<span class="kw">const</span> valor = <span class="kw">new</span> <span class="cls">Intl</span>.NumberFormat(<span class="str">'pt-BR'</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> }).format(n)</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Com data-handlers — uma API consistente</span></div>
+<pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+handlers.name.normalize(<span class="str">'  joao   silva  '</span>)   <span class="cm">// 'Joao Silva'</span>
+handlers.cpf.normalize(<span class="str">'11144477735'</span>)         <span class="cm">// '111.444.777-35'</span>
+handlers.number.normalize(<span class="num">1234.5</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> })  <span class="cm">// 'R$ 1.234,50'</span></pre>
+</div>
+
+<div class="grid">
+  <div class="sc"><h3>Handlers embutidos</h3><ul>
+    <li>name — Title Case + conectivos</li>
+    <li>number — Intl.NumberFormat</li>
+    <li>date — Intl.DateTimeFormat</li>
+  </ul></div>
+  <div class="sc"><h3>Plugins nacionais</h3><ul>
+    <li>CPF, CNPJ, RG</li>
+    <li>CEP, Telefone</li>
+    <li>Slug, E-mail, Cor</li>
+  </ul></div>
+  <div class="sc"><h3>API fluente</h3><ul>
+    <li>handlers.cpf.parse()</li>
+    <li>handlers.cpf.safe()</li>
+    <li>handlers.has() · .types</li>
+  </ul></div>
+  <div class="sc"><h3>Schemas</h3><ul>
+    <li>Valida objetos inteiros</li>
+    <li>parse · safeParse</li>
+    <li>extend · pick · omit</li>
+  </ul></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="install">Instalação <a class="anchor" href="#install">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Terminal</span></div>
+<pre>npm install data-handlers
+<span class="cm"># ou</span>
+pnpm add data-handlers</pre>
+</div>
+
+<div class="note"><strong>Requisito:</strong> Node.js 18 ou superior. Usa ESM (<code>type: "module"</code>). Autocomplete TypeScript funciona em JS puro via os arquivos <code>.d.ts</code> inclusos.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="conceito">Conceito central <a class="anchor" href="#conceito">#</a></h2>
+
+<p>A lib mantém um <strong>registry</strong> interno — um <code>Map</code> que associa um nome de tipo a uma função chamada <strong>handler</strong>.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Como o registry funciona internamente</span></div>
+<pre><span class="cm">// O registry nada mais é que um Map</span>
+registry.get(<span class="str">'name'</span>)   <span class="cm">// → nameHandler()</span>
+registry.get(<span class="str">'number'</span>) <span class="cm">// → numberHandler()</span>
+registry.get(<span class="str">'cpf'</span>)    <span class="cm">// → cpfHandler()   ← registrado pelo plugin</span>
+
+<span class="cm">// Quando você chama:</span>
+handlers.name.normalize(<span class="str">'joao'</span>)
+
+<span class="cm">// A lib faz internamente:</span>
+<span class="kw">const</span> handler = registry.get(<span class="str">'name'</span>)
+<span class="kw">return</span> handler(<span class="str">'joao'</span>)  <span class="cm">// → 'Joao'</span></pre>
+</div>
+
+<p>Um <strong>handler</strong> é qualquer função <code>(value, options?) => string</code> que ou retorna o valor normalizado ou lança um <code>TypeError</code> descritivo se o valor for inválido. É tudo.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="normalize">normalize() <a class="anchor" href="#normalize">#</a></h2>
+
+<p>Função de nível superior para uso direto. Recebe um objeto com <code>type</code>, <code>value</code> e <code>options</code> opcionais. <strong>Lança se o valor for inválido.</strong></p>
+
+<div class="card">
+<div class="ch"><span class="label">normalize()</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { normalize } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+normalize({ type: <span class="str">'name'</span>,   value: <span class="str">'  joao   silva  '</span> })
+<span class="cm">// → 'Joao Silva'</span>
+
+normalize({ type: <span class="str">'cpf'</span>,    value: <span class="str">'11144477735'</span> })
+<span class="cm">// → '111.444.777-35'</span>
+
+normalize({ type: <span class="str">'number'</span>, value: <span class="num">1234567.89</span>, options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> } })
+<span class="cm">// → 'R$ 1.234.567,89'</span>
+
+normalize({ type: <span class="str">'date'</span>,   value: <span class="kw">new</span> <span class="cls">Date</span>(), options: { dateStyle: <span class="str">'long'</span>, locale: <span class="str">'pt-BR'</span> } })
+<span class="cm">// → '3 de março de 2026'</span>
+
+<span class="cm">// Valor inválido → lança</span>
+normalize({ type: <span class="str">'cpf'</span>, value: <span class="str">'000.000.000-00'</span> })
+<span class="cm">// → throws TypeError: [normalize:cpf] Invalid CPF. Received: 000.000.000-00</span></pre>
+</div>
+
+<div class="note"><strong>type é case-insensitive:</strong> <code>'name'</code>, <code>'Name'</code> e <code>'NAME'</code> são equivalentes. Espaços em volta também são ignorados.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="validate">validate() <a class="anchor" href="#validate">#</a></h2>
+
+<p>Mesma assinatura de <code>normalize()</code>, mas <strong>nunca lança</strong>. Retorna sempre um objeto <code>{ valid, value, error }</code>.</p>
+
+<div class="card">
+<div class="ch"><span class="label">validate()</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { validate } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+validate({ type: <span class="str">'cpf'</span>, value: <span class="str">'11144477735'</span> })
+<span class="cm">// → { valid: true, value: '111.444.777-35', error: null }</span>
+
+validate({ type: <span class="str">'cpf'</span>, value: <span class="str">'000.000.000-00'</span> })
+<span class="cm">// → { valid: false, value: null, error: '[normalize:cpf] Invalid CPF...' }</span>
+
+<span class="cm">// Uso típico em formulários</span>
+<span class="kw">const</span> result = validate({ type: <span class="str">'cpf'</span>, value: inputDoUsuario })
+
+<span class="kw">if</span> (!result.valid) {
+  mostrarErro(result.error)
+} <span class="kw">else</span> {
+  salvarNoBanco(result.value) <span class="cm">// já formatado: '111.444.777-35'</span>
+}</pre>
+</div>
+
+<table>
+  <tr><th>Propriedade</th><th>Quando valid: true</th><th>Quando valid: false</th></tr>
+  <tr><td>valid</td><td><code>true</code></td><td><code>false</code></td></tr>
+  <tr><td>value</td><td>String normalizada</td><td><code>null</code></td></tr>
+  <tr><td>error</td><td><code>null</code></td><td>Mensagem do erro</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="handlers">Uso fluente com handlers <a class="anchor" href="#handlers">#</a></h2>
+
+<p>Chamar <code>normalize({ type: 'name', ... })</code> toda hora é verboso. O objeto <code>handlers</code> é um <strong>Proxy</strong> que cria accessors por tipo — você acessa o tipo como propriedade e chama o método.</p>
+
+<div class="card">
+<div class="ch"><span class="label">handlers proxy</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="cm">// Em vez de normalize({ type: 'name', value: '...' })</span>
+handlers.name.normalize(<span class="str">'  joao  '</span>)    <span class="cm">// 'Joao'</span>
+handlers.cpf.normalize(<span class="str">'11144477735'</span>) <span class="cm">// '111.444.777-35'</span>
+handlers.date.normalize(<span class="kw">new</span> <span class="cls">Date</span>(), { dateStyle: <span class="str">'short'</span>, locale: <span class="str">'pt-BR'</span> })</pre>
+</div>
+
+<p>Cada <code>handlers.&lt;tipo&gt;</code> expõe quatro métodos:</p>
+
+<table>
+  <tr><th>Método</th><th>Comportamento</th></tr>
+  <tr><td>.normalize(v, opts)</td><td>Normaliza — lança <code>TypeError</code> se inválido</td></tr>
+  <tr><td>.validate(v, opts)</td><td>Nunca lança — retorna <code>{ valid, value, error }</code></td></tr>
+  <tr><td>.parse(v, opts)</td><td>Alias de <code>.normalize()</code> — estilo Zod</td></tr>
+  <tr><td>.safe(v, opts)</td><td>Alias de <code>.validate()</code> — estilo Zod</td></tr>
+</table>
+
+<div class="card">
+<div class="ch"><span class="label">Os quatro métodos na prática</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.cpf.normalize(<span class="str">'11144477735'</span>)  <span class="cm">// '111.444.777-35'  — lança se inválido</span>
+handlers.cpf.parse(<span class="str">'11144477735'</span>)     <span class="cm">// '111.444.777-35'  — mesmo, alias Zod</span>
+
+handlers.cpf.validate(<span class="str">'000.000.000-00'</span>) <span class="cm">// { valid: false, value: null, error: '...' }</span>
+handlers.cpf.safe(<span class="str">'000.000.000-00'</span>)    <span class="cm">// idem, alias Zod</span></pre>
+</div>
+
+<div class="tip"><strong>Qual usar?</strong> Use <code>.parse()</code> quando quiser falhar ruidosamente (ex: ao salvar no banco). Use <code>.safe()</code> quando precisar exibir feedback ao usuário sem travar o fluxo.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="introspect">Introspecção <a class="anchor" href="#introspect">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">handlers.has · handlers.types · handlers.$</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.has(<span class="str">'cpf'</span>)       <span class="cm">// true  — tipo existe no registry?</span>
+handlers.has(<span class="str">'xyz'</span>)       <span class="cm">// false</span>
+
+handlers.types
+<span class="cm">// ['name','number','date','cpf','cnpj','phone','cep','slug','email','rg','color']</span>
+
+<span class="cm">// Namespace meta $ — mesmas funcionalidades, organizadas</span>
+handlers.$.has(<span class="str">'cpf'</span>)     <span class="cm">// true</span>
+handlers.$.types           <span class="cm">// mesmo array acima</span>
+
+<span class="cm">// Tentativa de atribuição direta lança TypeError</span>
+handlers.name = <span class="str">'algo'</span>    <span class="cm">// → TypeError: Use register() to add handlers.</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="name">Handler: name <a class="anchor" href="#name">#</a></h2>
+
+<p>Converte nomes para Title Case, com tratamento correto de acentos e conectivos.</p>
+
+<div class="card">
+<div class="ch"><span class="label">name</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.name.normalize(<span class="str">'MARIA SILVA'</span>)          <span class="cm">// 'Maria Silva'</span>
+handlers.name.normalize(<span class="str">'  joão   da   silva  '</span>) <span class="cm">// 'João da Silva'</span>
+handlers.name.normalize(<span class="str">'pedro de souza'</span>)        <span class="cm">// 'Pedro de Souza'</span>
+handlers.name.normalize(<span class="str">'maria das dores'</span>)       <span class="cm">// 'Maria das Dores'</span></pre>
+</div>
+
+<p>Conectivos mantidos em minúsculo por padrão: <code>de, da, do, das, dos, e, of, the, and, at, in, on</code></p>
+
+<div class="card">
+<div class="ch"><span class="label">Opção lowerCaseWords</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Desabilitar completamente</span>
+handlers.name.normalize(<span class="str">'joao de paula'</span>, { lowerCaseWords: [] })
+<span class="cm">// → 'Joao De Paula'</span>
+
+<span class="cm">// Lista customizada</span>
+handlers.name.normalize(<span class="str">'casa das flores'</span>, { lowerCaseWords: [<span class="str">'das'</span>] })
+<span class="cm">// → 'Casa das Flores'</span>
+
+<span class="cm">// Erros</span>
+handlers.name.normalize(<span class="str">''</span>)    <span class="cm">// TypeError: [normalize:name] Expected non-empty string.</span>
+handlers.name.normalize(<span class="num">123</span>)   <span class="cm">// TypeError: [normalize:name] Expected non-empty string. Received: number</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="number">Handler: number <a class="anchor" href="#number">#</a></h2>
+
+<p>Delega para <code>Intl.NumberFormat</code>. Locale padrão: <code>pt-BR</code>. Aceita qualquer opção do <code>Intl.NumberFormatOptions</code>.</p>
+
+<div class="card">
+<div class="ch"><span class="label">number</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.number.normalize(<span class="num">1234567.89</span>)
+<span class="cm">// → '1.234.567,89'  (locale padrão: pt-BR)</span>
+
+handlers.number.normalize(<span class="num">1234567.89</span>, { locale: <span class="str">'en-US'</span> })
+<span class="cm">// → '1,234,567.89'</span>
+
+handlers.number.normalize(<span class="num">9.9</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → 'R$ 9,90'</span>
+
+handlers.number.normalize(<span class="num">9.9</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'USD'</span>, locale: <span class="str">'en-US'</span> })
+<span class="cm">// → '$9.90'</span>
+
+handlers.number.normalize(<span class="num">0.753</span>, { style: <span class="str">'percent'</span>, maximumFractionDigits: <span class="num">1</span> })
+<span class="cm">// → '75,3%'</span></pre>
+</div>
+
+<div class="warn"><strong>Erros distintos:</strong> <code>TypeError</code> se o value não for do tipo <code>number</code>. <code>RangeError</code> se for <code>NaN</code> ou <code>Infinity</code>. Assim você sabe exatamente o que deu errado.</div>
+
+<div class="card">
+<div class="ch"><span class="label">Erros do number</span></div>
+<pre>handlers.number.normalize(<span class="str">'123'</span>)     <span class="cm">// TypeError  — não é number</span>
+handlers.number.normalize(<span class="cls">NaN</span>)       <span class="cm">// RangeError — NaN não é finito</span>
+handlers.number.normalize(<span class="cls">Infinity</span>)  <span class="cm">// RangeError — Infinity não é finito</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="date">Handler: date <a class="anchor" href="#date">#</a></h2>
+
+<p>Delega para <code>Intl.DateTimeFormat</code>. Locale padrão: <code>pt-BR</code>. Aceita três formatos de entrada.</p>
+
+<div class="card">
+<div class="ch"><span class="label">date — três tipos de entrada</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Date object</span>
+handlers.date.normalize(<span class="kw">new</span> <span class="cls">Date</span>(<span class="str">'2024-01-15'</span>), { dateStyle: <span class="str">'long'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '15 de janeiro de 2024'</span>
+
+<span class="cm">// String ISO</span>
+handlers.date.normalize(<span class="str">'2024-01-15T12:00:00'</span>, { dateStyle: <span class="str">'short'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '15/01/2024'</span>
+
+<span class="cm">// Timestamp Unix em ms (Date.now() ou valor salvo no banco)</span>
+handlers.date.normalize(<span class="num">1735689600000</span>, { dateStyle: <span class="str">'medium'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '1 de jan. de 2025'</span></pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Opções de dateStyle</span></div>
+<pre><span class="kw">const</span> d = <span class="kw">new</span> <span class="cls">Date</span>(<span class="num">2024</span>, <span class="num">0</span>, <span class="num">15</span>)
+<span class="kw">const</span> o = { locale: <span class="str">'pt-BR'</span> }
+
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'short'</span>  }) <span class="cm">// '15/01/2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'medium'</span> }) <span class="cm">// '15 de jan. de 2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'long'</span>   }) <span class="cm">// '15 de janeiro de 2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'full'</span>   }) <span class="cm">// 'segunda-feira, 15 de janeiro de 2024'</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="cpf">Plugin: cpf <a class="anchor" href="#cpf">#</a></h2>
+
+<p>Valida usando o algoritmo oficial de dígito verificador e formata no padrão <code>000.000.000-00</code>.</p>
+
+<div class="card">
+<div class="ch"><span class="label">cpf</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.cpf.normalize(<span class="str">'11144477735'</span>)    <span class="cm">// '111.444.777-35'</span>
+handlers.cpf.normalize(<span class="str">'111.444.777-35'</span>) <span class="cm">// '111.444.777-35'  (idempotente)</span>
+
+handlers.cpf.safe(<span class="str">'00000000000'</span>)  <span class="cm">// { valid: false, ... }  — sequência repetida</span>
+handlers.cpf.safe(<span class="str">'11144477700'</span>)  <span class="cm">// { valid: false, ... }  — dígito verificador errado</span>
+handlers.cpf.safe(<span class="str">'11144477735'</span>)  <span class="cm">// { valid: true,  value: '111.444.777-35', error: null }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="cnpj">Plugin: cnpj <a class="anchor" href="#cnpj">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">cnpj</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.cnpj.normalize(<span class="str">'11222333000181'</span>)     <span class="cm">// '11.222.333/0001-81'</span>
+handlers.cnpj.normalize(<span class="str">'11.222.333/0001-81'</span>) <span class="cm">// '11.222.333/0001-81'</span>
+
+handlers.cnpj.safe(<span class="str">'00000000000000'</span>)  <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="cep">Plugin: cep <a class="anchor" href="#cep">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">cep</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.cep.normalize(<span class="str">'01310100'</span>)  <span class="cm">// '01310-100'</span>
+handlers.cep.normalize(<span class="str">'01310-100'</span>) <span class="cm">// '01310-100'</span>
+
+handlers.cep.safe(<span class="str">'0131010'</span>)  <span class="cm">// { valid: false, ... }  — menos de 8 dígitos</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="phone">Plugin: phone <a class="anchor" href="#phone">#</a></h2>
+
+<p>Suporta fixo (10 dígitos) e celular (11 dígitos).</p>
+
+<div class="card">
+<div class="ch"><span class="label">phone</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.phone.normalize(<span class="str">'11987654321'</span>) <span class="cm">// '(11) 98765-4321'  — celular</span>
+handlers.phone.normalize(<span class="str">'1134567890'</span>)  <span class="cm">// '(11) 3456-7890'   — fixo</span>
+handlers.phone.normalize(<span class="str">'(11) 98765-4321'</span>) <span class="cm">// idempotente</span>
+
+handlers.phone.safe(<span class="str">'123'</span>)  <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="rg">Plugin: rg <a class="anchor" href="#rg">#</a></h2>
+
+<p>Formata no padrão SP <code>00.000.000-X</code>. Suporta RGs de 7 a 9 dígitos e dígito verificador X.</p>
+
+<div class="card">
+<div class="ch"><span class="label">rg</span><span class="tag green">pt-BR</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.rg.normalize(<span class="str">'123456789'</span>)  <span class="cm">// '12.345.678-9'</span>
+handlers.rg.normalize(<span class="str">'12345678X'</span>)  <span class="cm">// '12.345.678-X'  — dígito X válido</span>
+
+<span class="cm">// Apenas dígitos, sem formatação</span>
+handlers.rg.normalize(<span class="str">'123456789'</span>, { format: <span class="str">'digits'</span> }) <span class="cm">// '123456789'</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="slug">Plugin: slug <a class="anchor" href="#slug">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">slug</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.slug.normalize(<span class="str">'Olá Mundo Legal!'</span>)    <span class="cm">// 'ola-mundo-legal'</span>
+handlers.slug.normalize(<span class="str">'Café & Chá'</span>)          <span class="cm">// 'cafe-cha'</span>
+handlers.slug.normalize(<span class="str">'  espaços   duplos '</span>) <span class="cm">// 'espacos-duplos'</span>
+
+<span class="cm">// Separador customizado</span>
+handlers.slug.normalize(<span class="str">'Meu Post Incrível'</span>, { separator: <span class="str">'_'</span> })
+<span class="cm">// 'meu_post_incrivel'</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="email">Plugin: email <a class="anchor" href="#email">#</a></h2>
+
+<p>Normaliza (trim + lowercase) e valida via RFC 5322 simplificado.</p>
+
+<div class="card">
+<div class="ch"><span class="label">email</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.email.normalize(<span class="str">'  USER@EMPRESA.COM.BR  '</span>)  <span class="cm">// 'user@empresa.com.br'</span>
+handlers.email.normalize(<span class="str">'joao@empresa.com.br'</span>)      <span class="cm">// 'joao@empresa.com.br'</span>
+
+handlers.email.safe(<span class="str">'invalido'</span>)      <span class="cm">// { valid: false, ... }</span>
+handlers.email.safe(<span class="str">'sem@dominio'</span>)   <span class="cm">// { valid: false, ... }</span>
+handlers.email.safe(<span class="str">'ok@teste.com'</span>)  <span class="cm">// { valid: true, value: 'ok@teste.com', ... }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="color">Plugin: color <a class="anchor" href="#color">#</a></h2>
+
+<p>Aceita <code>#rgb</code>, <code>#rrggbb</code> e <code>rgb(r,g,b)</code>. Converte entre formatos.</p>
+
+<div class="card">
+<div class="ch"><span class="label">color</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Hex shorthand expandido</span>
+handlers.color.normalize(<span class="str">'#abc'</span>)     <span class="cm">// '#aabbcc'</span>
+handlers.color.normalize(<span class="str">'#FF0080'</span>)  <span class="cm">// '#ff0080'</span>
+
+<span class="cm">// RGB → hex</span>
+handlers.color.normalize(<span class="str">'rgb(255, 0, 128)'</span>)  <span class="cm">// '#ff0080'</span>
+
+<span class="cm">// Formatos de saída</span>
+handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'rgb'</span>       })  <span class="cm">// 'rgb(255, 0, 128)'</span>
+handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'hex-upper'</span> })  <span class="cm">// '#FF0080'</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="schema-intro">Schemas: validar objetos inteiros <a class="anchor" href="#schema-intro">#</a></h2>
+
+<p>Quando você tem um formulário ou payload com múltiplos campos, fazer a validação campo por campo na mão fica trabalhoso. O sistema de schemas resolve isso de uma vez.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Definindo um schema</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { schema } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> cadastroSchema = schema({
+  name:     <span class="str">'name'</span>,    <span class="cm">// forma curta: só o tipo</span>
+  document: <span class="str">'cpf'</span>,
+  phone:    <span class="str">'phone'</span>,
+  email:    <span class="str">'email'</span>,
+})</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="schema-parse">parse() e safeParse() <a class="anchor" href="#schema-parse">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">parse() — lança SchemaError se inválido</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> dados = cadastroSchema.parse({
+  name:     <span class="str">'JOAO SILVA'</span>,
+  document: <span class="str">'11144477735'</span>,
+  phone:    <span class="str">'11987654321'</span>,
+  email:    <span class="str">'joao@empresa.com'</span>,
+})
+
+<span class="cm">// dados →</span>
+<span class="cm">// {</span>
+<span class="cm">//   name:     'Joao Silva',</span>
+<span class="cm">//   document: '111.444.777-35',</span>
+<span class="cm">//   phone:    '(11) 98765-4321',</span>
+<span class="cm">//   email:    'joao@empresa.com'</span>
+<span class="cm">// }</span></pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">safeParse() — nunca lança</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> result = cadastroSchema.safeParse(req.body)
+
+<span class="kw">if</span> (!result.success) {
+  <span class="kw">return</span> res.status(<span class="num">400</span>).json({ errors: result.errors })
+  <span class="cm">// errors: {</span>
+  <span class="cm">//   name:     '[normalize:name] Expected non-empty string...',</span>
+  <span class="cm">//   document: '[normalize:cpf] Invalid CPF...',</span>
+  <span class="cm">// }</span>
+}
+
+<span class="kw">await</span> salvarUsuario(result.data) <span class="cm">// já normalizado</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="schema-fields">Opções de campo <a class="anchor" href="#schema-fields">#</a></h2>
+
+<p>Além da forma curta (só o tipo como string), cada campo aceita um objeto com configurações:</p>
+
+<div class="card">
+<div class="ch"><span class="label">Forma completa de um campo</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> pedidoSchema = schema({
+  <span class="cm">// Forma curta</span>
+  customerName: <span class="str">'name'</span>,
+
+  <span class="cm">// optional: null/undefined passam sem erro</span>
+  coupon: { type: <span class="str">'slug'</span>, optional: <span class="kw">true</span> },
+
+  <span class="cm">// default: valor usado quando o campo vier undefined</span>
+  country: { type: <span class="str">'slug'</span>, default: <span class="str">'brasil'</span> },
+
+  <span class="cm">// options: repassadas ao handler</span>
+  total: {
+    type:    <span class="str">'number'</span>,
+    options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> }
+  },
+
+  <span class="cm">// label: nome legível nas mensagens de erro</span>
+  doc: {
+    type:  <span class="str">'cpf'</span>,
+    label: <span class="str">'CPF do cliente'</span>,
+  },
+})</pre>
+</div>
+
+<table>
+  <tr><th>Opção</th><th>Tipo</th><th>Descrição</th></tr>
+  <tr><td>type</td><td>string</td><td>Tipo registrado (obrigatório)</td></tr>
+  <tr><td>optional</td><td>boolean</td><td>Se <code>true</code>, null/undefined passam sem erro</td></tr>
+  <tr><td>default</td><td>any</td><td>Valor usado quando o campo for <code>undefined</code></td></tr>
+  <tr><td>options</td><td>object</td><td>Repassado ao handler como segundo argumento</td></tr>
+  <tr><td>label</td><td>string</td><td>Nome legível nas mensagens de erro</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="schema-utils">Utilitários de schema <a class="anchor" href="#schema-utils">#</a></h2>
+
+<p>Todos retornam novos schemas — o original nunca é modificado.</p>
+
+<div class="card">
+<div class="ch"><span class="label">extend · pick · omit · partial</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> userSchema = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, document: <span class="str">'cpf'</span> })
+
+<span class="cm">// .partial() — todos os campos viram opcionais</span>
+<span class="kw">const</span> updateSchema = userSchema.partial()
+updateSchema.safeParse({}) <span class="cm">// success: true — todos campos omitidos ok</span>
+
+<span class="cm">// .pick() — só os campos especificados</span>
+<span class="kw">const</span> loginSchema = userSchema.pick(<span class="str">'email'</span>, <span class="str">'document'</span>)
+
+<span class="cm">// .omit() — remove campos</span>
+<span class="kw">const</span> publicUser = userSchema.omit(<span class="str">'document'</span>) <span class="cm">// sem CPF na resposta pública</span>
+
+<span class="cm">// .extend() — adiciona campos (não altera o original)</span>
+<span class="kw">const</span> fullSchema = userSchema.extend({ phone: <span class="str">'phone'</span>, cep: <span class="str">'cep'</span> })
+
+<span class="cm">// Padrão prático: um schema base, três variações</span>
+<span class="kw">const</span> createUser = userSchema                  <span class="cm">// todos obrigatórios</span>
+<span class="kw">const</span> patchUser  = userSchema.partial()        <span class="cm">// todos opcionais (PATCH)</span>
+<span class="kw">const</span> publicUser2 = userSchema.omit(<span class="str">'document'</span>) <span class="cm">// sem CPF no response</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="schema-error">SchemaError <a class="anchor" href="#schema-error">#</a></h2>
+
+<p>Quando <code>.parse()</code> falha, lança uma instância de <code>SchemaError</code> com o mapa completo de erros.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Capturando SchemaError</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">try</span> {
+  cadastroSchema.parse({ name: <span class="str">''</span>, document: <span class="str">'invalido'</span>, phone: <span class="str">'123'</span> })
+} <span class="kw">catch</span> (err) {
+  <span class="kw">if</span> (err <span class="kw">instanceof</span> <span class="cls">SchemaError</span>) {
+    console.log(err.errors)
+    <span class="cm">// {</span>
+    <span class="cm">//   name:     '[normalize:name] Expected non-empty string...',</span>
+    <span class="cm">//   document: '[normalize:cpf] Invalid CPF...',</span>
+    <span class="cm">//   phone:    '[normalize:phone] Expected 10 or 11-digit...'</span>
+    <span class="cm">// }</span>
+  }
+}</pre>
+</div>
+
+<div class="note"><strong>Todos os erros de uma vez:</strong> o schema não para no primeiro erro. Ele processa todos os campos e retorna o mapa completo — assim você pode exibir todos os problemas para o usuário de uma só vez.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="register">register() — handlers customizados <a class="anchor" href="#register">#</a></h2>
+
+<p>A lib foi feita para ser estendida. Um handler é qualquer função <code>(value, options?) => string</code> que lança <code>TypeError</code> se o valor for inválido.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Criando e usando um handler customizado</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { register, handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+register(<span class="str">'placa'</span>, (value) => {
+  <span class="kw">const</span> clean = <span class="cls">String</span>(value).toUpperCase().replace(<span class="str">/[^A-Z0-9]/g</span>, <span class="str">''</span>)
+
+  <span class="kw">if</span> (!<span class="str">/^[A-Z]{3}[0-9]{4}$/</span>.test(clean) && !<span class="str">/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/</span>.test(clean)) {
+    <span class="kw">throw new</span> <span class="cls">TypeError</span>(<span class="str">`[normalize:placa] Placa inválida. Recebido: ${value}`</span>)
+  }
+
+  <span class="kw">return</span> <span class="str">`${clean.slice(0, 3)}-${clean.slice(3)}`</span>
+})
+
+handlers.placa.normalize(<span class="str">'ABC1234'</span>)  <span class="cm">// 'ABC-1234'</span>
+handlers.placa.normalize(<span class="str">'ABC1D23'</span>)  <span class="cm">// 'ABC-1D23'  (Mercosul)</span>
+handlers.placa.safe(<span class="str">'INVALIDO'</span>)     <span class="cm">// { valid: false, ... }</span>
+
+<span class="cm">// E funciona em schemas também</span>
+<span class="kw">const</span> veiculoSchema = schema({ owner: <span class="str">'name'</span>, plate: <span class="str">'placa'</span> })</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="aliases">registerAliases() — múltiplos nomes <a class="anchor" href="#aliases">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">registerAliases()</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { registerAliases, handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="cm">// O tipo 'name' já existe — cria aliases que apontam pro mesmo handler</span>
+registerAliases(<span class="str">'name'</span>, <span class="str">'nome'</span>, <span class="str">'fullName'</span>, <span class="str">'fullname'</span>, <span class="str">'nomeCompleto'</span>)
+
+handlers.nome.normalize(<span class="str">'joao silva'</span>)          <span class="cm">// 'Joao Silva'</span>
+handlers.nomeCompleto.normalize(<span class="str">'joao silva'</span>)   <span class="cm">// 'Joao Silva'</span>
+
+<span class="cm">// Útil para suporte pt-BR / en-US paralelo no mesmo sistema</span>
+registerAliases(<span class="str">'cpf'</span>, <span class="str">'document'</span>, <span class="str">'taxId'</span>)
+handlers.document.safe(<span class="str">'11144477735'</span>) <span class="cm">// { valid: true, value: '111.444.777-35' }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="plugin">createPlugin() — para pacotes externos <a class="anchor" href="#plugin">#</a></h2>
+
+<p>Alias semântico de <code>register()</code>. Use quando for publicar um handler como pacote npm separado (<code>data-handlers-pix</code>, <code>data-handlers-nfe</code>, etc.).</p>
+
+<div class="card">
+<div class="ch"><span class="label">Estrutura de um plugin externo</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// data-handlers-pix/index.js</span>
+<span class="kw">import</span> { createPlugin } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> pixHandler = (value) => {
+  <span class="cm">// Chave Pix pode ser CPF, CNPJ, telefone, email ou UUID aleatório</span>
+  <span class="kw">const</span> clean = <span class="cls">String</span>(value).trim()
+  <span class="kw">if</span> (!isValidPixKey(clean)) {
+    <span class="kw">throw new</span> <span class="cls">TypeError</span>(<span class="str">`[normalize:pix] Chave Pix inválida. Recebido: ${value}`</span>)
+  }
+  <span class="kw">return</span> clean
+}
+
+createPlugin(<span class="str">'pix'</span>, pixHandler)
+
+<span class="cm">// Quem instalar e importar o pacote terá handlers.pix disponível automaticamente</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="pattern-api">Padrão: endpoint REST <a class="anchor" href="#pattern-api">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Express — POST /usuarios</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> cadastroSchema = schema({
+  name:     <span class="str">'name'</span>,
+  document: <span class="str">'cpf'</span>,
+  phone:    { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> },
+  email:    <span class="str">'email'</span>,
+  zipCode:  { type: <span class="str">'cep'</span>, label: <span class="str">'CEP'</span> },
+})
+
+app.post(<span class="str">'/usuarios'</span>, (req, res) => {
+  <span class="kw">const</span> result = cadastroSchema.safeParse(req.body)
+
+  <span class="kw">if</span> (!result.success) {
+    <span class="kw">return</span> res.status(<span class="num">400</span>).json({
+      message: <span class="str">'Dados inválidos'</span>,
+      errors:  result.errors,
+    })
+  }
+
+  <span class="cm">// result.data está completamente normalizado e pronto pro banco</span>
+  db.users.create(result.data)
+  res.status(<span class="num">201</span>).json(result.data)
+})</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="pattern-form">Padrão: validação de formulário <a class="anchor" href="#pattern-form">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Feedback em tempo real no input</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+inputCPF.addEventListener(<span class="str">'input'</span>, (e) => {
+  <span class="kw">const</span> { valid, value, error } = handlers.cpf.safe(e.target.value)
+
+  <span class="kw">if</span> (valid) {
+    e.target.value = value          <span class="cm">// aplica a máscara</span>
+    campoErro.textContent = <span class="str">''</span>
+    inputCPF.classList.remove(<span class="str">'error'</span>)
+  } <span class="kw">else</span> {
+    campoErro.textContent = <span class="str">'CPF inválido'</span>
+    inputCPF.classList.add(<span class="str">'error'</span>)
+  }
+})</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="pattern-display">Padrão: formatar antes de exibir <a class="anchor" href="#pattern-display">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Formatar dados vindos do banco</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">function</span> <span class="fn">formatarPerfil</span>(usuario) {
+  <span class="kw">return</span> {
+    ...usuario,
+    name:      handlers.name.normalize(usuario.name),
+    document:  handlers.cpf.normalize(usuario.document),
+    phone:     handlers.phone.normalize(usuario.phone),
+    createdAt: handlers.date.normalize(usuario.createdAt, {
+      dateStyle: <span class="str">'long'</span>,
+      locale:    <span class="str">'pt-BR'</span>,
+    }),
+    balance: handlers.number.normalize(usuario.balance, {
+      style:    <span class="str">'currency'</span>,
+      currency: <span class="str">'BRL'</span>,
+      locale:   <span class="str">'pt-BR'</span>,
+    }),
+  }
+}</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="pattern-patch">Padrão: PATCH parcial <a class="anchor" href="#pattern-patch">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Um schema base, várias operações</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> userSchema   = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, phone: <span class="str">'phone'</span> })
+<span class="kw">const</span> updateSchema = userSchema.partial()  <span class="cm">// todos os campos viram opcionais</span>
+
+app.patch(<span class="str">'/usuarios/:id'</span>, (req, res) => {
+  <span class="kw">const</span> result = updateSchema.safeParse(req.body)
+
+  <span class="kw">if</span> (!result.success) {
+    <span class="kw">return</span> res.status(<span class="num">400</span>).json({ errors: result.errors })
+  }
+
+  <span class="cm">// Só atualiza os campos que vieram — os outros ficam como estão</span>
+  db.users.update(req.params.id, result.data)
+  res.json(result.data)
+})</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
+<h2 id="cheatsheet">Cheatsheet <a class="anchor" href="#cheatsheet">#</a></h2>
+
+<div class="card">
+<div class="ch"><span class="label">Referência rápida — tudo em um lugar</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { normalize, validate, handlers, schema, <span class="cls">SchemaError</span>,
+         register, registerAliases, createPlugin } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="cm">// ── Funções base ─────────────────────────────────────────────────────────</span>
+normalize({ type, value, options })   <span class="cm">// formata — lança se inválido</span>
+validate({ type, value, options })    <span class="cm">// { valid, value, error } — nunca lança</span>
+
+<span class="cm">// ── handlers proxy ───────────────────────────────────────────────────────</span>
+handlers.<span class="prop">&lt;tipo&gt;</span>.normalize(v, opts)   <span class="cm">// lança se inválido</span>
+handlers.<span class="prop">&lt;tipo&gt;</span>.validate(v, opts)    <span class="cm">// nunca lança</span>
+handlers.<span class="prop">&lt;tipo&gt;</span>.parse(v, opts)      <span class="cm">// alias de normalize</span>
+handlers.<span class="prop">&lt;tipo&gt;</span>.safe(v, opts)       <span class="cm">// alias de validate</span>
+
+handlers.has(<span class="str">'cpf'</span>)                 <span class="cm">// true/false</span>
+handlers.types                       <span class="cm">// ['name','number','date','cpf',...]</span>
+handlers.$.has(<span class="str">'cpf'</span>)              <span class="cm">// meta namespace</span>
+handlers.$.types
+
+<span class="cm">// ── Schemas ──────────────────────────────────────────────────────────────</span>
+<span class="kw">const</span> s = schema({ name: <span class="str">'name'</span>, doc: <span class="str">'cpf'</span>, phone: { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> } })
+
+s.parse(obj)        <span class="cm">// lança SchemaError com .errors se inválido</span>
+s.safeParse(obj)    <span class="cm">// { success, data, errors } — nunca lança</span>
+s.partial()         <span class="cm">// todos os campos opcionais</span>
+s.pick(<span class="str">'name'</span>)      <span class="cm">// só esses campos</span>
+s.omit(<span class="str">'phone'</span>)    <span class="cm">// sem esse campo</span>
+s.extend({ x: <span class="str">'slug'</span> }) <span class="cm">// adiciona campos</span>
+
+<span class="cm">// ── Extensão ─────────────────────────────────────────────────────────────</span>
+register(<span class="str">'tipo'</span>, handler)                 <span class="cm">// registra handler customizado</span>
+registerAliases(<span class="str">'name'</span>, <span class="str">'nome'</span>, <span class="str">'fullName'</span>) <span class="cm">// múltiplos nomes pro mesmo handler</span>
+createPlugin(<span class="str">'tipo'</span>, handler)              <span class="cm">// alias de register(), para plugins</span></pre>
+</div>
+
+</main>
+</div>
+
+<script>
+function cp(btn) {
+    const pre = btn.closest('.card').querySelector('pre')
+    const text = pre.innerText
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copiado!'
+        btn.style.color = '#3fb950'
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.style.color = '' }, 1800)
+    })
+}
+
+// Active nav highlight
+const sections = document.querySelectorAll('h2[id]')
+const links    = document.querySelectorAll('nav a')
+
+const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+        if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove('active'))
+            const a = document.querySelector(`nav a[href="#${e.target.id}"]`)
+            if (a) a.classList.add('active')
+        }
+    })
+}, { rootMargin: '-20% 0px -70% 0px' })
+
+sections.forEach(s => observer.observe(s))
+</script>
+</body>
+</html>
