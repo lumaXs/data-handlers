@@ -1,6 +1,6 @@
 {
   "name": "data-handlers",
-  "version": "1.0.3",
+  "version": "1.0.1",
   "description": "Normalização e validação extensível com plugins plugáveis (name, number, date, cpf, cnpj, phone, cep, slug, email, rg, color) — zero dependências, foco no mercado brasileiro 🇧🇷",
   "type": "module",
   "main": "./index.js",
