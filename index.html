@@ -251,10 +251,14 @@ h2:hover .anchor{opacity:1}
   <div class="sec">handlers proxy</div>
   <a href="#handlers">Uso fluente</a>
   <a href="#introspect">Introspecção</a>
-  <div class="sec">Handlers</div>
+  <div class="sec">Handlers do core</div>
   <a href="#name">name</a>
   <a href="#number">number</a>
   <a href="#date">date</a>
+  <a href="#password">password</a>
+  <a href="#url">url</a>
+  <a href="#uuid">uuid</a>
+  <a href="#any">any</a>
   <div class="sec">Plugins BR</div>
   <a href="#cpf">cpf</a>
   <a href="#cnpj">cnpj</a>
@@ -317,10 +321,11 @@ handlers.number.normalize(<span class="num">1234.5</span>, { style: <span class=
 </div>
 
 <div class="grid">
-  <div class="sc"><h3>Handlers embutidos</h3><ul>
+  <div class="sc"><h3>Handlers do core</h3><ul>
     <li>name — Title Case + conectivos</li>
     <li>number — Intl.NumberFormat</li>
     <li>date — Intl.DateTimeFormat</li>
+    <li>password, url, uuid, any</li>
   </ul></div>
   <div class="sc"><h3>Plugins nacionais</h3><ul>
     <li>CPF, CNPJ, RG</li>
@@ -598,6 +603,8 @@ handlers.cpf.safe(<span class="str">'11144477700'</span>)  <span class="cm">// {
 handlers.cpf.safe(<span class="str">'11144477735'</span>)  <span class="cm">// { valid: true,  value: '111.444.777-35', error: null }</span></pre>
 </div>
 
+<div class="note"><strong>Referência viva:</strong> a lista completa de tipos registrados está sempre disponível em runtime via <code>handlers.types</code>. Os plugins abaixo cobrem os principais — novos handlers podem estar disponíveis além dos documentados aqui.</div>
+
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <h2 id="cnpj">Plugin: cnpj <a class="anchor" href="#cnpj">#</a></h2>
 
@@ -695,6 +702,160 @@ handlers.color.normalize(<span class="str">'rgb(255, 0, 128)'</span>)  <span cla
 handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'rgb'</span>       })  <span class="cm">// 'rgb(255, 0, 128)'</span>
 handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'hex-upper'</span> })  <span class="cm">// '#FF0080'</span></pre>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="password">Handler: password <a class="anchor" href="#password">#</a></h2>
+
+<p>Valida senhas com regras configuráveis via <code>options</code>. Não normaliza — apenas valida e retorna o valor original se passar.</p>
+
+<div class="card">
+<div class="ch"><span class="label">password — padrões default</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.password.normalize(<span class="str">'Senha@123'</span>)  <span class="cm">// 'Senha@123'</span>
+<span class="cm">// padrão: minLength 8, requer maiúscula, minúscula e especial</span>
+
+handlers.password.safe(<span class="str">'fraca'</span>)
+<span class="cm">// { valid: false, error: '[normalize:password] Password must be at least 8...' }</span>
+
+handlers.password.safe(<span class="str">'semEspecial1'</span>)
+<span class="cm">// { valid: false, error: '[normalize:password] ...at least one special character' }</span></pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">password — options configuráveis</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.password.normalize(<span class="str">'SenhaSegura@123'</span>, {
+  minLength:        <span class="num">12</span>,      <span class="cm">// padrão: 8</span>
+  requireUppercase: <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireLowercase: <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireSpecial:   <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireNumber:    <span class="kw">true</span>,   <span class="cm">// padrão: false</span>
+})</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">password no schema</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">const</span> signupSchema = schema({
+  name:     <span class="str">'name'</span>,
+  email:    <span class="str">'email'</span>,
+  password: <span class="str">'password'</span>,
+  <span class="cm">// com regras customizadas:</span>
+  <span class="cm">// password: { type: 'password', options: { minLength: 12, requireNumber: true } }</span>
+})</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="url">Handler: url <a class="anchor" href="#url">#</a></h2>
+
+<p>Valida e normaliza URLs. Coloca o host em lowercase, preserva path, query string e hash intactos.</p>
+
+<div class="card">
+<div class="ch"><span class="label">url</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>handlers.url.normalize(<span class="str">'https://example.com'</span>)          <span class="cm">// 'https://example.com/'</span>
+handlers.url.normalize(<span class="str">'HTTPS://EXAMPLE.COM/api/v1'</span>)    <span class="cm">// 'https://example.com/api/v1'</span>
+handlers.url.normalize(<span class="str">'https://x.com/path?foo=bar'</span>)    <span class="cm">// preserva query</span>
+
+<span class="cm">// Protocolo customizado</span>
+handlers.url.normalize(<span class="str">'ftp://files.com'</span>, { protocols: [<span class="str">'ftp'</span>] })  <span class="cm">// 'ftp://files.com/'</span>
+
+<span class="cm">// ftp sem permissão → lança</span>
+handlers.url.safe(<span class="str">'ftp://files.com'</span>)  <span class="cm">// { valid: false, ... }</span>
+handlers.url.safe(<span class="str">'nao-e-url'</span>)        <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="uuid">Handler: uuid <a class="anchor" href="#uuid">#</a></h2>
+
+<p>Valida formato UUID e normaliza capitalização. Suporta versões 1, 3, 4, 5 e 7.</p>
+
+<div class="card">
+<div class="ch"><span class="label">uuid</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Normaliza para lowercase por padrão</span>
+handlers.uuid.normalize(<span class="str">'550E8400-E29B-41D4-A716-446655440000'</span>)
+<span class="cm">// '550e8400-e29b-41d4-a716-446655440000'</span>
+
+<span class="cm">// Uppercase se preferir</span>
+handlers.uuid.normalize(<span class="str">'550e8400-e29b-41d4-a716-446655440000'</span>, { uppercase: <span class="kw">true</span> })
+<span class="cm">// '550E8400-E29B-41D4-A716-446655440000'</span>
+
+<span class="cm">// Exige versão específica</span>
+handlers.uuid.normalize(id, { version: <span class="num">4</span> })  <span class="cm">// lança se não for v4</span>
+
+handlers.uuid.safe(<span class="str">'nao-e-uuid'</span>)  <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="any">Handler: any <a class="anchor" href="#any">#</a></h2>
+
+<p>Passa qualquer valor não-nulo sem normalizar. Essencial em schemas para campos que não têm um handler específico — metadata, configurações, campos livres.</p>
+
+<div class="card">
+<div class="ch"><span class="label">any — sem restrição de tipo</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Qualquer valor não-nulo passa</span>
+handlers.any.normalize(<span class="str">'texto'</span>)  <span class="cm">// 'texto'</span>
+handlers.any.normalize(<span class="num">42</span>)       <span class="cm">// 42</span>
+handlers.any.normalize(<span class="kw">true</span>)    <span class="cm">// true</span>
+
+<span class="cm">// Null e undefined lançam sempre</span>
+handlers.any.safe(<span class="kw">null</span>)       <span class="cm">// { valid: false, ... }</span>
+handlers.any.safe(<span class="kw">undefined</span>)  <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">any — com demandType</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Restringe o tipo primitivo aceito</span>
+handlers.any.normalize(<span class="num">42</span>,   { demandType: <span class="str">'number'</span>  })  <span class="cm">// 42</span>
+handlers.any.normalize(<span class="kw">true</span>, { demandType: <span class="str">'boolean'</span> })  <span class="cm">// true</span>
+handlers.any.safe(<span class="str">'oi'</span>,      { demandType: <span class="str">'number'</span>  })  <span class="cm">// { valid: false, ... }</span>
+
+<span class="cm">// No schema</span>
+<span class="kw">const</span> s = schema({
+  tag:      <span class="str">'any'</span>,                                            <span class="cm">// string, number, boolean...</span>
+  score:    { type: <span class="str">'any'</span>, options: { demandType: <span class="str">'number'</span>  } },
+  active:   { type: <span class="str">'any'</span>, options: { demandType: <span class="str">'boolean'</span> } },
+  metadata: { type: <span class="str">'any'</span>, optional: <span class="kw">true</span> },
+})</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">any — com transform</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="cm">// Callback de transformação/validação customizada</span>
+handlers.any.normalize(<span class="num">5</span>,    { transform: (v) => v * <span class="num">2</span> })           <span class="cm">// 10</span>
+handlers.any.normalize(<span class="str">'oi'</span>, { transform: (v) => v.toUpperCase() })  <span class="cm">// 'OI'</span>
+
+<span class="cm">// demandType + transform: checagem de tipo roda antes do callback</span>
+handlers.any.normalize(<span class="num">150</span>, {
+  demandType: <span class="str">'number'</span>,
+  transform:  (v) => <span class="cls">Math</span>.min(<span class="num">100</span>, v),  <span class="cm">// clamp máximo 100</span>
+})  <span class="cm">// 100</span>
+
+<span class="cm">// O callback pode lançar para validações customizadas</span>
+handlers.any.normalize(value, {
+  transform: (v) => {
+    <span class="kw">if</span> (!<span class="cls">Array</span>.isArray(v))
+      <span class="kw">throw new</span> <span class="cls">TypeError</span>(<span class="str">'[normalize:any] Expected array.'</span>)
+    <span class="kw">return</span> v.map(t => t.trim().toLowerCase())
+  }
+})
+
+<span class="cm">// No schema</span>
+<span class="kw">const</span> s = schema({
+  score: {
+    type: <span class="str">'any'</span>,
+    options: {
+      demandType: <span class="str">'number'</span>,
+      transform:  (v) => <span class="cls">Math</span>.max(<span class="num">0</span>, <span class="cls">Math</span>.min(<span class="num">100</span>, v)),  <span class="cm">// clamp 0–100</span>
+    }
+  },
+  tags: {
+    type: <span class="str">'any'</span>,
+    options: {
+      transform: (v) => <span class="cls">Array</span>.isArray(v) ? v.map(t => t.toLowerCase()) : [v],
+    }
+  },
+})</pre>
+</div>
+
+<div class="note"><strong>Dica:</strong> <code>any</code> também aceita objetos e arrays. O <code>transform</code> é a saída perfeita pra validações e transformações que não cabem num handler dedicado — sem precisar criar um tipo novo no registry.</div>
+
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <hr>
@@ -1033,12 +1194,12 @@ handlers.<span class="prop">&lt;tipo&gt;</span>.parse(v, opts)      <span class=
 handlers.<span class="prop">&lt;tipo&gt;</span>.safe(v, opts)       <span class="cm">// alias de validate</span>
 
 handlers.has(<span class="str">'cpf'</span>)                 <span class="cm">// true/false</span>
-handlers.types                       <span class="cm">// ['name','number','date','cpf',...]</span>
+handlers.types                       <span class="cm">// ['name','number','date','password','url','uuid','any','cpf',...]</span>
 handlers.$.has(<span class="str">'cpf'</span>)              <span class="cm">// meta namespace</span>
 handlers.$.types
 
 <span class="cm">// ── Schemas ──────────────────────────────────────────────────────────────</span>
-<span class="kw">const</span> s = schema({ name: <span class="str">'name'</span>, doc: <span class="str">'cpf'</span>, phone: { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> } })
+<span class="kw">const</span> s = schema({ name: <span class="str">'name'</span>, doc: <span class="str">'cpf'</span>, pass: <span class="str">'password'</span>, tag: <span class="str">'any'</span>, phone: { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> } })
 
 s.parse(obj)        <span class="cm">// lança SchemaError com .errors se inválido</span>
 s.safeParse(obj)    <span class="cm">// { success, data, errors } — nunca lança</span>

@@ -1,6 +1,10 @@
-import { nameHandler }   from '../handlers/nameHandler.js'
+import { nameHandler } from '../handlers/nameHandler.js'
 import { numberHandler } from '../handlers/numberHandler.js'
-import { dateHandler }   from '../handlers/dateHandler.js'
+import { dateHandler } from '../handlers/dateHandler.js'
+import { passwordHandler } from '../handlers/passwordHandler.js'
+import { urlHandler } from '../handlers/urlHandler.js'
+import { uuidHandler } from '../handlers/uuidHandler.js'
+import { anyHandler } from '../handlers/anyHandler.js'
 
 /**
  * Normaliza o identificador de tipo: trim + lowercase.
@@ -11,10 +15,10 @@ import { dateHandler }   from '../handlers/dateHandler.js'
  * @returns {string}
  */
 export const formatType = (type) => {
-    if (typeof type !== 'string') {
-        throw new TypeError('[normalize] Type must be a string')
-    }
-    return type.trim().toLowerCase()
+   if (typeof type !== 'string') {
+      throw new TypeError('[normalize] Type must be a string')
+   }
+   return type.trim().toLowerCase()
 }
 
 /**
@@ -23,9 +27,13 @@ export const formatType = (type) => {
  * @type {Map<string, Function>}
  */
 export const registry = new Map([
-    ['name',   nameHandler],
-    ['number', numberHandler],
-    ['date',   dateHandler],
+   ['name', nameHandler],
+   ['number', numberHandler],
+   ['date', dateHandler],
+   ['password', passwordHandler],
+   ['url', urlHandler],
+   ['uuid', uuidHandler],
+   ['any', anyHandler]
 ])
 
 /**
@@ -34,10 +42,10 @@ export const registry = new Map([
  * @param {Function} handler
  */
 export function register(type, handler) {
-    if (typeof handler !== 'function') {
-        throw new TypeError('[normalize] Handler must be a function')
-    }
-    registry.set(formatType(type), handler)
+   if (typeof handler !== 'function') {
+      throw new TypeError('[normalize] Handler must be a function')
+   }
+   registry.set(formatType(type), handler)
 }
 
 /**
@@ -52,16 +60,16 @@ export function register(type, handler) {
  * handlers.nome.normalize('joao silva') // 'Joao Silva'
  */
 export function registerAliases(type, ...aliases) {
-    const key = formatType(type)
-    const handler = registry.get(key)
-    if (!handler) {
-        throw new TypeError(
-            `[normalize] Cannot alias unknown type: "${key}". Register it first.`
-        )
-    }
-    for (const alias of aliases) {
-        registry.set(formatType(alias), handler)
-    }
+   const key = formatType(type)
+   const handler = registry.get(key)
+   if (!handler) {
+      throw new TypeError(
+         `[normalize] Cannot alias unknown type: "${key}". Register it first.`
+      )
+   }
+   for (const alias of aliases) {
+      registry.set(formatType(alias), handler)
+   }
 }
 
 /**
