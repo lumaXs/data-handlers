@@ -1,12 +1,10 @@
 {
   "name": "data-handlers",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Zero-dependency data normalization and validation for JavaScript and TypeScript, with pluggable handlers and first-class support for Brazilian formats (CPF, CNPJ, CEP).",
   "type": "module",
-
   "main": "./index.js",
   "types": "./index.d.ts",
-
   "exports": {
     ".": {
       "import": "./index.js",
@@ -16,7 +14,6 @@
       "import": "./schema/index.js"
     }
   },
-
   "files": [
     "index.js",
     "index.d.ts",
@@ -26,7 +23,6 @@
     "api",
     "schema"
   ],
-
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -34,7 +30,6 @@
     "release:minor": "pnpm test && pnpm version minor && pnpm publish",
     "release:major": "pnpm test && pnpm version major && pnpm publish"
   },
-
   "keywords": [
     "validation",
     "normalize",
@@ -64,14 +59,11 @@
     "brazil",
     "brasil"
   ],
-
   "author": "Emersom Oliveira",
   "license": "MIT",
-
   "engines": {
     "node": ">=18"
   },
-
   "devDependencies": {
     "vitest": "^4.0.18"
   }
