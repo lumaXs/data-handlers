@@ -669,12 +669,12 @@ handlers.slug.normalize(<span class="str">'Meu Post Incrível'</span>, { separat
 
 <div class="card">
 <div class="ch"><span class="label">email</span><button class="cb" onclick="cp(this)">Copiar</button></div>
-<pre>handlers.email.normalize(<span class="str">'  <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="194c4a5c4b595c54494b5c4a58375a5654375b4b">[email&#160;protected]</a>  '</span>)  <span class="cm">// '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="84f1f7e1f6c4e1e9f4f6e1f7e5aae7ebe9aae6f6">[email&#160;protected]</a>'</span>
-handlers.email.normalize(<span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="adc7c2ccc2edc8c0dddfc8decc83cec2c083cfdf">[email&#160;protected]</a>'</span>)      <span class="cm">// '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e58f8a848aa580889597809684cb868a88cb8797">[email&#160;protected]</a>'</span>
+<pre>handlers.email.normalize(<span class="str">'  JOAO&#64;EMAIL.COM  '</span>)  <span class="cm">// 'joao&#64;email.com'</span>
+handlers.email.normalize(<span class="str">'USUARIO&#64;EMAIL.COM'</span>)      <span class="cm">// 'usuario&#64;email.com'</span>
 
 handlers.email.safe(<span class="str">'invalido'</span>)      <span class="cm">// { valid: false, ... }</span>
-handlers.email.safe(<span class="str">'sem@dominio'</span>)   <span class="cm">// { valid: false, ... }</span>
-handlers.email.safe(<span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6e01052e1a0b1d1a0b400d0103">[email&#160;protected]</a>'</span>)  <span class="cm">// { valid: true, value: '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="690602291d0c1a1d0c470a0604">[email&#160;protected]</a>', ... }</span></pre>
+handlers.email.safe(<span class="str">'sem&#64;dominio'</span>)   <span class="cm">// { valid: false, ... }</span>
+handlers.email.safe(<span class="str">'ok&#64;email.com'</span>)  <span class="cm">// { valid: true, value: 'ok&#64;email.com', ... }</span></pre>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -723,7 +723,7 @@ handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span cla
   name:     <span class="str">'JOAO SILVA'</span>,
   document: <span class="str">'11144477735'</span>,
   phone:    <span class="str">'11987654321'</span>,
-  email:    <span class="str">'<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="12787d737d52777f62607761733c717d7f">[email&#160;protected]</a>'</span>,
+  email:    <span class="str">'JOAOsilVa95&#64;Email.com'</span>,
 })
 
 <span class="cm">// dados →</span>
@@ -731,7 +731,7 @@ handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span cla
 <span class="cm">//   name:     'Joao Silva',</span>
 <span class="cm">//   document: '111.444.777-35',</span>
 <span class="cm">//   phone:    '(11) 98765-4321',</span>
-<span class="cm">//   email:    '<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3d57525c527d58504d4f584e5c135e5250">[email&#160;protected]</a>'</span>
+<span class="cm">//   email:    'joaosilva95&#64;email.com'</span>
 <span class="cm">// }</span></pre>
 </div>
 
