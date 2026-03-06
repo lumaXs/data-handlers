@@ -1,23 +1,23 @@
 {
   "name": "data-handlers",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Zero-dependency data normalization and validation for JavaScript and TypeScript, with pluggable handlers and first-class support for Brazilian formats (CPF, CNPJ, CEP).",
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
   "exports": {
-  ".": {
-    "import": "./index.js",
-    "types":  "./index.d.ts"
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    },
+    "./serve": {
+      "import": "./wrapper/serve.js",
+      "types": "./wrapper/serve.d.ts"
+    },
+    "./schema": {
+      "import": "./schema/index.js"
+    }
   },
-  "./serve": {
-    "import": "./wrapper/serve.js",
-    "types":  "./wrapper/serve.d.ts"
-  },
-  "./schema": {
-    "import": "./schema/index.js"
-  }
-},
   "files": [
     "index.js",
     "index.d.ts",
