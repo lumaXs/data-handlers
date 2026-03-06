@@ -6,14 +6,18 @@
   "main": "./index.js",
   "types": "./index.d.ts",
   "exports": {
-    ".": {
-      "import": "./index.js",
-      "types": "./index.d.ts"
-    },
-    "./schema": {
-      "import": "./schema/index.js"
-    }
+  ".": {
+    "import": "./index.js",
+    "types":  "./index.d.ts"
   },
+  "./serve": {
+    "import": "./wrapper/serve.js",
+    "types":  "./wrapper/serve.d.ts"
+  },
+  "./schema": {
+    "import": "./schema/index.js"
+  }
+},
   "files": [
     "index.js",
     "index.d.ts",
@@ -21,7 +25,8 @@
     "handlers",
     "plugins",
     "api",
-    "schema"
+    "schema",
+    "wrapper"
   ],
   "scripts": {
     "test": "vitest run",

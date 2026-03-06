@@ -283,6 +283,8 @@ h2:hover .anchor{opacity:1}
   <a href="#pattern-form">Formulário</a>
   <a href="#pattern-display">Exibição</a>
   <a href="#pattern-patch">PATCH parcial</a>
+  <div class="sec">Bônus</div>
+  <a href="#serve">data-handlers/serve</a>
   <div class="sec">Referência</div>
   <a href="#cheatsheet">Cheatsheet</a>
 </nav>
@@ -1176,6 +1178,119 @@ app.patch(<span class="str">'/usuarios/:id'</span>, (req, res) => {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <hr>
+<h2 id="serve">Bônus: data-handlers/serve <a class="anchor" href="#serve">#</a></h2>
+
+<p>A lib inclui um wrapper HTTP para Node.js puro — sem Express, sem Fastify. A API é intencionalmente parecida com o <code>Bun.serve()</code>, então quem usa Bun vai se sentir em casa, e quem usa Node.js puro não precisa aprender um framework novo só pra ter roteamento básico.</p>
+
+<div class="note"><strong>Node.js >= 18 apenas.</strong> Usa Web APIs nativas (<code>Request</code>, <code>Response</code>, <code>URL</code>). Não é necessário com Bun, Express, Fastify ou similares — esses já têm roteamento próprio.</div>
+
+<div class="card">
+<div class="ch"><span class="label">Servidor básico</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+<span class="kw">import</span> { schema } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> userSchema = schema({
+  name:     <span class="str">'name'</span>,
+  email:    <span class="str">'email'</span>,
+  phone:    <span class="str">'phone'</span>,
+  document: <span class="str">'cpf'</span>,
+  password: <span class="str">'password'</span>,
+})
+
+<span class="kw">const</span> users = []
+
+serve({
+  port: <span class="num">3000</span>,
+
+  routes: {
+    <span class="str">'/'</span>: () => <span class="cls">Response</span>.json({ message: <span class="str">'Welcome to the backend.'</span> }),
+
+    <span class="str">'/users'</span>: {
+      GET: () => <span class="cls">Response</span>.json(users),
+
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> result = userSchema.safeParse(<span class="kw">await</span> req.json())
+        <span class="kw">if</span> (!result.success)
+          <span class="kw">return</span> <span class="cls">Response</span>.json(result.errors, { status: <span class="num">400</span> })
+
+        users.push(result.data)
+        <span class="kw">return</span> <span class="cls">Response</span>.json(result.data, { status: <span class="num">201</span> })
+      }
+    },
+
+    <span class="str">'/users/:id'</span>: {
+      GET: (req) => {
+        <span class="kw">const</span> user = users.find(u => u.id === req.params.id)
+        <span class="kw">if</span> (!user) <span class="kw">return new</span> <span class="cls">Response</span>(<span class="str">'Not Found'</span>, { status: <span class="num">404</span> })
+        <span class="kw">return</span> <span class="cls">Response</span>.json(user)
+      },
+
+      DELETE: (req) => {
+        <span class="kw">const</span> i = users.findIndex(u => u.id === req.params.id)
+        <span class="kw">if</span> (i === <span class="num">-1</span>) <span class="kw">return new</span> <span class="cls">Response</span>(<span class="str">'Not Found'</span>, { status: <span class="num">404</span> })
+        users.splice(i, <span class="num">1</span>)
+        <span class="kw">return new</span> <span class="cls">Response</span>(<span class="kw">null</span>, { status: <span class="num">204</span> })
+      }
+    }
+  },
+
+  error: (err) => <span class="cls">Response</span>.json({ error: err.message }, { status: <span class="num">500</span> })
+})</pre>
+</div>
+
+<p>Cada rota aceita um handler direto (qualquer método) ou um objeto com os métodos separados. Params de URL ficam em <code>req.params</code>:</p>
+
+<div class="card">
+<div class="ch"><span class="label">Rotas com params e wildcard</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  port: <span class="num">3000</span>,
+  routes: {
+    <span class="cm">// Handler direto — qualquer método</span>
+    <span class="str">'/'</span>: (req) => <span class="cls">Response</span>.json({ method: req.method }),
+
+    <span class="cm">// Params de URL</span>
+    <span class="str">'/posts/:slug'</span>: {
+      GET: (req) => <span class="cls">Response</span>.json({ slug: req.params.slug }),
+    },
+
+    <span class="cm">// Múltiplos params</span>
+    <span class="str">'/users/:id/posts/:postId'</span>: {
+      GET: (req) => <span class="cls">Response</span>.json(req.params),
+      <span class="cm">// req.params → { id: '123', postId: '456' }</span>
+    },
+
+    <span class="cm">// Wildcard — captura qualquer rota não mapeada</span>
+    <span class="str">'/*'</span>: () => <span class="cls">Response</span>.json({ error: <span class="str">'Not found'</span> }, { status: <span class="num">404</span> }),
+  }
+})</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">fetch fallback e error handler</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>serve({
+  port: <span class="num">3000</span>,
+  routes: { <span class="cm">/* ... */</span> },
+
+  <span class="cm">// fetch: chamado quando nenhuma rota casa</span>
+  fetch: (req) => {
+    <span class="kw">const</span> url = <span class="kw">new</span> <span class="cls">URL</span>(req.url)
+    <span class="kw">return</span> <span class="cls">Response</span>.json({ path: url.pathname, message: <span class="str">'rota não encontrada'</span> }, { status: <span class="num">404</span> })
+  },
+
+  <span class="cm">// error: captura qualquer erro não tratado nos handlers</span>
+  error: (err) => {
+    console.error(err)
+    <span class="kw">return</span> <span class="cls">Response</span>.json({ error: <span class="str">'Internal Server Error'</span> }, { status: <span class="num">500</span> })
+  }
+})</pre>
+</div>
+
+<div class="note">O objeto retornado por <code>serve()</code> é um <code>http.Server</code> nativo do Node — dá pra fazer tudo que você faria normalmente, tipo <code>server.close()</code> em testes. Ele também expõe <code>server.url</code> com a URL base do servidor.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<hr>
 <h2 id="cheatsheet">Cheatsheet <a class="anchor" href="#cheatsheet">#</a></h2>
 
 <div class="card">
@@ -1278,3 +1393,4 @@ sections.forEach(s => observer.observe(s))
 
 </body>
 </html>
+
