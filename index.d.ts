@@ -182,6 +182,12 @@ export interface NumberHandlerOptions extends Intl.NumberFormatOptions {
 export interface DateHandlerOptions extends Intl.DateTimeFormatOptions {
    /** BCP 47 locale. @default 'pt-BR' */
    locale?: string
+   /** 
+    * Formato de saída especial.
+    * - `'iso'` — retorna string ISO 8601 (ex: `2026-03-06T00:00:00.000Z`)
+    * - omitido — usa `Intl.DateTimeFormat` com as demais options
+    */
+   format?: 'iso'
 }
 
 export type DateInput = Date | string | number

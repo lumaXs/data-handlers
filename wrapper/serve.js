@@ -20,11 +20,14 @@ function parseRoute(path) {
  * @returns {Array<{ path: string, regex: RegExp, keys: string[], handler: unknown }>}
  */
 function buildRouter(routes) {
-   return Object.entries(routes).map(([path, handler]) => ({
-      path,
-      ...parseRoute(path),
-      handler,
-   }));
+   return Object.entries(routes)
+      .map(([path, handler]) => ({
+         path,
+         dynamic: path.includes(':') || path.includes('*'),
+         ...parseRoute(path),
+         handler
+      }))
+      .sort((a, b) => a.dynamic - b.dynamic);
 }
 
 /**
@@ -43,12 +46,23 @@ function extractParams(match, keys) {
  * @param {import('http').IncomingMessage} nodeReq
  * @returns {Promise<Buffer>}
  */
-function readBody(nodeReq) {
-   return new Promise((resolve) => {
-      const chunks = [];
-      nodeReq.on("data", (chunk) => chunks.push(chunk));
-      nodeReq.on("end", () => resolve(Buffer.concat(chunks)));
-   });
+function readBody(nodeReq, limit = 1e6) {
+   return new Promise((resolve, reject) => {
+      const chunks = []
+      let size = 0
+
+      nodeReq.on("data", chunk => {
+         size += chunk.length
+         if (size > limit) {
+            reject(new Error("Payload too large"))
+            nodeReq.destroy()
+            return
+         }
+         chunks.push(chunk)
+      })
+
+      nodeReq.on("end", () => resolve(Buffer.concat(chunks)))
+   })
 }
 
 /**
@@ -117,7 +131,10 @@ export function serve({ port = 3000, routes = {}, fetch: fallback, error: errorH
          const request = new Request(url, {
             method,
             headers: nodeReq.headers,
-            body: ["GET", "HEAD"].includes(method) ? undefined : bodyBuffer,
+            body:
+               ["GET", "HEAD"].includes(method) || bodyBuffer.length === 0
+                  ? undefined
+                  : bodyBuffer,
          });
 
          let response = null;
