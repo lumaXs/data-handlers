@@ -112,29 +112,118 @@ export interface FieldConfig {
 
 export type SchemaShape = Record<string, string | FieldConfig>
 
+// ---------------------------------------------------------------------------
+// Schema inference
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve o tipo de saída de um campo individual.
+ * - Campo com optional + default → sempre string (default garante presença)
+ * - Campo com optional sem default → string | null
+ * - Campo obrigatório → string
+ */
+type FieldOutput<F extends string | FieldConfig> =
+   F extends string
+      ? string
+      : F extends { optional: true; default: unknown }
+         ? string
+         : F extends { optional: true }
+            ? string | null
+            : string
+
+/** Chaves obrigatórias do shape (incluindo optional com default) */
+type RequiredKeys<TShape extends SchemaShape> = {
+   [K in keyof TShape]: TShape[K] extends { optional: true }
+      ? TShape[K] extends { default: unknown } ? K : never
+      : K
+}[keyof TShape]
+
+/** Chaves opcionais do shape (optional sem default) */
+type OptionalKeys<TShape extends SchemaShape> = {
+   [K in keyof TShape]: TShape[K] extends { optional: true }
+      ? TShape[K] extends { default: unknown } ? never : K
+      : never
+}[keyof TShape]
+
+/**
+ * Infere o tipo de saída de um schema a partir do seu shape.
+ *
+ * @example
+ * const userSchema = schema({ name: 'name', phone: { type: 'phone', optional: true } })
+ * type User = InferSchema<typeof userSchema>
+ * // { name: string; phone?: string | null }
+ */
+export type InferSchema<TShape extends SchemaShape> =
+   { [K in RequiredKeys<TShape> & string]:  FieldOutput<TShape[K]> } &
+   { [K in OptionalKeys<TShape> & string]?: FieldOutput<TShape[K]> }
+
+/** Transforma todos os campos de um shape em opcionais (usado por .partial()) */
+type MakePartialShape<TShape extends SchemaShape> = {
+   [K in keyof TShape]: TShape[K] extends string
+      ? { type: TShape[K]; optional: true }
+      : TShape[K] extends FieldConfig
+         ? TShape[K] & { optional: true }
+         : never
+}
+
+// ---------------------------------------------------------------------------
+// Schema interface
+// ---------------------------------------------------------------------------
+
 export type SchemaParseResult<T = Record<string, string>> =
-   | { success: true; data: T; errors: null }
+   | { success: true;  data: T;    errors: null }
    | { success: false; data: null; errors: Record<string, string> }
 
 export interface Schema<TShape extends SchemaShape = SchemaShape> {
-   /** Normaliza e retorna o objeto. Lança SchemaError se inválido. */
-   parse(input: unknown): Record<string, unknown>
-   /** Normaliza sem lançar. Retorna { success, data, errors }. */
-   safeParse(input: unknown): SchemaParseResult
-   /** Estende o schema com campos adicionais (imutável — retorna novo schema). */
-   extend(extra: SchemaShape): Schema
-   /** Retorna novo schema com apenas os campos especificados. */
-   pick(...keys: string[]): Schema
-   /** Retorna novo schema sem os campos especificados. */
-   omit(...keys: string[]): Schema
-   /** Retorna novo schema com todos os campos como optional. */
-   partial(): Schema
+   /**
+    * Normaliza e retorna o objeto tipado.
+    * Lança SchemaError se algum campo for inválido.
+    */
+   parse(input: unknown): InferSchema<TShape>
+
+   /**
+    * Normaliza sem lançar.
+    * Retorna `{ success: true, data }` ou `{ success: false, errors }`.
+    */
+   safeParse(input: unknown): SchemaParseResult<InferSchema<TShape>>
+
+   /**
+    * Estende o schema com campos adicionais.
+    * Imutável — retorna novo schema.
+    * @example
+    * userSchema.extend({ cep: 'cep' })
+    */
+   extend<TExtra extends SchemaShape>(extra: TExtra): Schema<TShape & TExtra>
+
+   /**
+    * Retorna novo schema com apenas os campos especificados.
+    * @example
+    * userSchema.pick('name', 'email')
+    */
+   pick<K extends keyof TShape & string>(...keys: K[]): Schema<Pick<TShape, K>>
+
+   /**
+    * Retorna novo schema sem os campos especificados.
+    * @example
+    * userSchema.omit('password')
+    */
+   omit<K extends keyof TShape & string>(...keys: K[]): Schema<Omit<TShape, K>>
+
+   /**
+    * Retorna novo schema com todos os campos como optional.
+    * Útil para PATCH parcial.
+    * @example
+    * const updateSchema = userSchema.partial()
+    */
+   partial(): Schema<MakePartialShape<TShape>>
+
    /** Mapa dos campos resolvidos */
    readonly fields: Record<string, FieldConfig>
 }
 
 /**
  * Cria um schema de validação/normalização de objetos.
+ * O tipo de saída é inferido automaticamente do shape.
  *
  * @example
  * const userSchema = schema({
@@ -144,10 +233,14 @@ export interface Schema<TShape extends SchemaShape = SchemaShape> {
  *   amount:   { type: 'number', options: { style: 'currency', currency: 'BRL', locale: 'pt-BR' } }
  * })
  *
- * userSchema.parse({ name: 'JOAO SILVA', document: '11144477735', amount: 99.9 })
- * // { name: 'Joao Silva', document: '111.444.777-35', amount: 'R$ 99,90' }
+ * const result = userSchema.safeParse(body)
+ * if (result.success) {
+ *   result.data.name     // string
+ *   result.data.phone    // string | null
+ *   result.data.amount   // string
+ * }
  */
-export function schema(shape: SchemaShape): Schema
+export function schema<TShape extends SchemaShape>(shape: TShape): Schema<TShape>
 
 /**
  * Erro lançado por schema.parse() quando a validação falha.
@@ -182,7 +275,7 @@ export interface NumberHandlerOptions extends Intl.NumberFormatOptions {
 export interface DateHandlerOptions extends Intl.DateTimeFormatOptions {
    /** BCP 47 locale. @default 'pt-BR' */
    locale?: string
-   /** 
+   /**
     * Formato de saída especial.
     * - `'iso'` — retorna string ISO 8601 (ex: `2026-03-06T00:00:00.000Z`)
     * - omitido — usa `Intl.DateTimeFormat` com as demais options

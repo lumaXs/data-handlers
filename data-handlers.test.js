@@ -77,6 +77,22 @@ describe('normalize()', () => {
       it('mensagem contém prefixo correto', () => {
          expect(() => normalize({ type: 'date', value: 'invalido' })).toThrow('[normalize:date]')
       })
+      it('retorna ISO 8601 com format: iso', () => {
+         const result = normalize({ type: 'date', value: '2026-03-06', options: { format: 'iso' } })
+         expect(result).toMatch(/^2026-03-06T/)
+      })
+      it('format: iso com Date object', () => {
+         const d = new Date('2000-01-01T00:00:00.000Z')
+         expect(normalize({ type: 'date', value: d, options: { format: 'iso' } })).toBe(d.toISOString())
+      })
+      it('format: iso com timestamp numérico', () => {
+         const ts = new Date('2024-06-15').getTime()
+         const result = normalize({ type: 'date', value: ts, options: { format: 'iso' } })
+         expect(result).toMatch(/^2024-06-15T/)
+      })
+      it('format: iso ainda lança pra data inválida', () => {
+         expect(() => normalize({ type: 'date', value: 'invalido', options: { format: 'iso' } })).toThrow('[normalize:date]')
+      })
    })
 
    describe('tipo desconhecido / case-insensitive', () => {
