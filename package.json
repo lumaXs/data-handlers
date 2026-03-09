@@ -1,6 +1,6 @@
 {
   "name": "data-handlers",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "Zero-dependency data normalization and validation for JavaScript and TypeScript, with pluggable handlers and first-class support for Brazilian formats (CPF, CNPJ, CEP).",
   "type": "module",
   "main": "./index.js",
