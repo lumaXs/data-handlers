@@ -1,0 +1,9 @@
+import './data-handlers-cpf/index.js';
+import './data-handlers-cnpj/index.js';
+import './data-handlers-phone/index.js';
+import './data-handlers-cep/index.js';
+import './data-handlers-slug/index.js';
+import './data-handlers-email/index.js';
+import './data-handlers-rg/index.js';
+import './data-handlers-color/index.js';
+//# sourceMappingURL=index.d.ts.map

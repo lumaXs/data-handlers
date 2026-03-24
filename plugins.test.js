@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { normalize, validate } from 'data-handlers'
 
-import './plugins/data-handlers-cpf/index.js'
-import './plugins/data-handlers-cnpj/index.js'
-import './plugins/data-handlers-phone/index.js'
-import './plugins/data-handlers-cep/index.js'
-import './plugins/data-handlers-slug/index.js'
-import './plugins/data-handlers-email/index.js'
-import './plugins/data-handlers-rg/index.js'
-import './plugins/data-handlers-color/index.js'
+import './dist/plugins/data-handlers-cpf/index.js'
+import './dist/plugins/data-handlers-cnpj/index.js'
+import './dist/plugins/data-handlers-phone/index.js'
+import './dist/plugins/data-handlers-cep/index.js'
+import './dist/plugins/data-handlers-slug/index.js'
+import './dist/plugins/data-handlers-email/index.js'
+import './dist/plugins/data-handlers-rg/index.js'
+import './dist/plugins/data-handlers-color/index.js'
 
 // ─── CPF ─────────────────────────────────────────────────────────────────────
 describe('plugin: cpf', () => {

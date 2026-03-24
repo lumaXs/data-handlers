@@ -7,7 +7,7 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            'data-handlers': fileURLToPath(new URL('./index.js', import.meta.url)),
+            'data-handlers': fileURLToPath(new URL('./dist/index.js', import.meta.url)),
         },
     },
 })
