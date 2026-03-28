@@ -2,9 +2,14 @@ import { createPlugin } from '../../src/main.js';
 const HEX_RE = /^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 const RGB_RE = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i;
 const hexExpand = (h) => h.length === 3
-    ? h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2)
+    ? h.charAt(0) +
+        h.charAt(0) +
+        h.charAt(1) +
+        h.charAt(1) +
+        h.charAt(2) +
+        h.charAt(2)
     : h;
-const rgbToHex = (r, g, b) => [r, g, b].map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+const rgbToHex = (r, g, b) => [r, g, b].map(n => Number(n).toString(16).padStart(2, '0')).join('');
 const colorHandler = (value, options = {}) => {
     if (typeof value !== 'string' || !value.trim()) {
         throw new TypeError(`[normalize:color] Expected non-empty string. Received: ${value}`);
@@ -20,7 +25,7 @@ const colorHandler = (value, options = {}) => {
         const r = rgbMatch[1] ?? '0';
         const g = rgbMatch[2] ?? '0';
         const b = rgbMatch[3] ?? '0';
-        if ([r, g, b].some((n) => Number(n) > 255)) {
+        if ([r, g, b].some(n => Number(n) > 255)) {
             throw new TypeError(`[normalize:color] RGB values must be 0-255. Received: ${value}`);
         }
         hex = rgbToHex(r, g, b);

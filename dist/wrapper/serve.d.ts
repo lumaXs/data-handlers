@@ -1,18 +1,96 @@
-export type BunLikeRequest = Request & {
-    params: Record<string, string>;
+/**
+ * Compara duas strings de forma segura contra timing attacks.
+ * Sempre leva o mesmo tempo independente de onde a string difere.
+ */
+export declare function safeCompare(a: string, b: string): boolean;
+export type SystemResponseBody = {
+    statusCode: number;
+    error: string;
+    message: string;
+    path: string;
+    timestamp: string;
 };
-export type RouteHandler = (req: BunLikeRequest) => Response | Promise<Response>;
-export type MethodMap = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>>;
-export type Routes = Record<string, RouteHandler | MethodMap>;
-export interface ServeOptions {
+type SystemResponseFactory = (req: {
+    url: string;
+}, message?: string) => Response;
+export declare const systemResponses: Record<number, SystemResponseFactory>;
+export type BunLikeRequest<TUser = unknown> = Request & {
+    params: Record<string, string>;
+    user: TUser | null;
+    /** Faz upgrade para WebSocket. Só funciona em rotas GET. */
+    upgrade: (data?: unknown) => Response;
+};
+export type Middleware<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | null | Promise<Response | null>;
+export type RouteHandler<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | Promise<Response>;
+export type MethodMap<TUser = unknown> = Partial<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', RouteHandler<TUser>>> & {
+    middleware?: Middleware<TUser>[];
+};
+export type Routes<TUser = unknown> = Record<string, RouteHandler<TUser> | MethodMap<TUser>>;
+export type RateLimitResult = {
+    allowed: boolean;
+    limit: number;
+    remaining: number;
+    reset: number;
+    retryAfter?: number;
+};
+export type WSContext<TData = unknown> = {
+    /** Envia dados para o cliente. */
+    send: (data: string | Buffer) => void;
+    /** Fecha a conexão. */
+    close: (code?: number, reason?: string) => void;
+    /** Contexto injetado no upgrade (ex: user autenticado). */
+    data: TData;
+    readyState: number;
+};
+export type WSHandlers<TData = unknown> = {
+    open?: (ws: WSContext<TData>) => void;
+    message?: (ws: WSContext<TData>, data: string | Buffer) => void;
+    close?: (ws: WSContext<TData>, code: number, reason: string) => void;
+    error?: (ws: WSContext<TData>, err: Error) => void;
+    /** Tamanho máximo de payload em bytes. Default: 64KB. */
+    maxPayload?: number;
+    /** Intervalo de heartbeat em ms. Default: 30s. 0 = desativado. */
+    heartbeat?: number;
+    /** Origens permitidas. Default: qualquer origem. */
+    allowedOrigins?: string[];
+};
+export type RateLimitOptions = {
+    /** Janela de tempo em ms. Default: 60000 (1 min). */
+    windowMs?: number;
+    /** Máximo de requests por janela. Default: 100. */
+    max?: number;
+    /** Mensagem customizada no 429. */
+    message?: string;
+    /**
+     * Se true, usa o header X-Forwarded-For pra extrair o IP real.
+     * ATENÇÃO: só ative se você confia no proxy. Default: false.
+     */
+    trustProxy?: boolean;
+};
+export type AuthFunction<TUser> = (req: BunLikeRequest<TUser>) => TUser | null | Promise<TUser | null>;
+export interface ServeOptions<TUser = unknown> {
     port?: number;
-    routes?: Routes;
-    fetch?: RouteHandler;
+    routes?: Routes<TUser>;
+    /** Middlewares globais — rodam em toda request, em ordem. */
+    middleware?: Middleware<TUser>[];
+    /** Fallback quando nenhuma rota casa. */
+    fetch?: RouteHandler<TUser>;
+    /** Handler de erros não tratados. */
     error?: (err: unknown) => Response | Promise<Response>;
+    /** Função de autenticação — injetada como req.user. */
+    auth?: AuthFunction<TUser>;
+    rateLimit?: RateLimitOptions;
+    websocket?: WSHandlers;
 }
-declare class Server {
+/**
+ * Middleware pronto pra usar: bloqueia requests sem req.user com 401.
+ * @example
+ * routes: { '/admin': { middleware: [requireAuth], GET: handler } }
+ */
+export declare function requireAuth<TUser = unknown>(req: BunLikeRequest<TUser>): Response | null;
+declare class Server<TUser = unknown> {
     #private;
-    constructor({ port, routes, fetch: fallback, error: errorHandler }?: ServeOptions);
+    constructor({ port, routes, middleware, fetch: fallback, error: errorHandler, auth, rateLimit, websocket, }?: ServeOptions<TUser>);
     get url(): URL;
     listen(): this;
     stop(): Promise<void>;
@@ -24,23 +102,43 @@ declare class Server {
  * @example
  * import { serve } from 'data-handlers/serve'
  *
+ * const myAuth = async (req) => {
+ *   const token = req.headers.get('authorization')?.replace('Bearer ', '')
+ *   return token ? verifyToken(token) : null
+ * }
+ *
  * serve({
  *   port: 3000,
+ *   auth: myAuth,
+ *   middleware: [logger],
+ *   rateLimit: { windowMs: 60_000, max: 100 },
  *   routes: {
  *     '/users': {
- *       GET:  (req) => Response.json(users),
+ *       GET: (req) => Response.json(users),
  *       POST: async (req) => {
  *         const body = await req.json()
  *         return Response.json(body, { status: 201 })
  *       }
  *     },
- *     '/users/:id': {
- *       GET: (req) => Response.json({ id: req.params.id })
+ *     '/admin': {
+ *       middleware: [requireAuth],
+ *       GET: (req) => Response.json({ user: req.user })
+ *     },
+ *     '/chat': {
+ *       GET: (req) => req.upgrade({ user: req.user })
  *     }
+ *   },
+ *   websocket: {
+ *     allowedOrigins: ['https://meusite.com'],
+ *     maxPayload: 64 * 1024,
+ *     heartbeat: 30_000,
+ *     open:    (ws) => console.log('conectou:', ws.data),
+ *     message: (ws, data) => ws.send(`eco: ${data}`),
+ *     close:   (ws, code) => console.log('desconectou:', code),
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
  * })
  */
-export declare function serve(options?: ServeOptions): Server;
+export declare function serve<TUser = unknown>(options?: ServeOptions<TUser>): Server<TUser>;
 export {};
 //# sourceMappingURL=serve.d.ts.map

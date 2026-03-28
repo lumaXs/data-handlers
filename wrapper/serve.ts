@@ -1,187 +1,855 @@
-import http from "http";
+import http from 'http'
+import crypto from 'crypto'
+import { EventEmitter } from 'events'
+
+// ─── Utilitários de segurança ──────────────────────────────────────────────────
+
+/**
+ * Compara duas strings de forma segura contra timing attacks.
+ * Sempre leva o mesmo tempo independente de onde a string difere.
+ */
+export function safeCompare(a: string, b: string): boolean {
+   const bufA = Buffer.from(a)
+   const bufB = Buffer.from(b)
+   if (bufA.length !== bufB.length) {
+      // Executa a comparação mesmo assim pra não vazar o tamanho via timing
+      crypto.timingSafeEqual(bufA, bufA)
+      return false
+   }
+   return crypto.timingSafeEqual(bufA, bufB)
+}
+
+// ─── System Responses ─────────────────────────────────────────────────────────
+
+export type SystemResponseBody = {
+   statusCode: number
+   error: string
+   message: string
+   path: string
+   timestamp: string
+}
+
+type SystemResponseFactory = (
+   req: { url: string },
+   message?: string,
+) => Response
+
+export const systemResponses: Record<number, SystemResponseFactory> = {
+   400: (req, message = 'Invalid request body') =>
+      Response.json(
+         {
+            statusCode: 400,
+            error: 'Bad Request',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 400 },
+      ),
+
+   401: (req, message = 'Access not allowed') =>
+      Response.json(
+         {
+            statusCode: 401,
+            error: 'Unauthorized',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 401 },
+      ),
+
+   403: (req, message = 'Forbidden') =>
+      Response.json(
+         {
+            statusCode: 403,
+            error: 'Forbidden',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 403 },
+      ),
+
+   404: (req, message = 'Not Found') =>
+      Response.json(
+         {
+            statusCode: 404,
+            error: 'Not Found',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 404 },
+      ),
+
+   405: (req, message = 'Method Not Allowed') =>
+      Response.json(
+         {
+            statusCode: 405,
+            error: 'Method Not Allowed',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 405 },
+      ),
+
+   429: (req, message = 'Too Many Requests') =>
+      Response.json(
+         {
+            statusCode: 429,
+            error: 'Too Many Requests',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 429 },
+      ),
+
+   500: (req, message = 'Internal Server Error') =>
+      Response.json(
+         {
+            statusCode: 500,
+            error: 'Internal Server Error',
+            message,
+            path: new URL(req.url).pathname,
+            timestamp: new Date().toISOString(),
+         } satisfies SystemResponseBody,
+         { status: 500 },
+      ),
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type BunLikeRequest = Request & { params: Record<string, string> };
+export type BunLikeRequest<TUser = unknown> = Request & {
+   params: Record<string, string>
+   user: TUser | null
+   /** Faz upgrade para WebSocket. Só funciona em rotas GET. */
+   upgrade: (data?: unknown) => Response
+}
 
-export type RouteHandler = (req: BunLikeRequest) => Response | Promise<Response>;
+export type Middleware<TUser = unknown> = (
+   req: BunLikeRequest<TUser>,
+) => Response | null | Promise<Response | null>
 
-export type MethodMap = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>>;
+export type RouteHandler<TUser = unknown> = (
+   req: BunLikeRequest<TUser>,
+) => Response | Promise<Response>
 
-export type Routes = Record<string, RouteHandler | MethodMap>;
+export type MethodMap<TUser = unknown> = Partial<
+   Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', RouteHandler<TUser>>
+> & {
+   middleware?: Middleware<TUser>[]
+}
 
-export interface ServeOptions {
-  port?: number;
-  routes?: Routes;
-  fetch?: RouteHandler;
-  error?: (err: unknown) => Response | Promise<Response>;
+export type Routes<TUser = unknown> = Record<
+   string,
+   RouteHandler<TUser> | MethodMap<TUser>
+>
+
+export type RateLimitResult = {
+   allowed: boolean
+   limit: number
+   remaining: number
+   reset: number
+   retryAfter?: number
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+
+export type WSContext<TData = unknown> = {
+   /** Envia dados para o cliente. */
+   send: (data: string | Buffer) => void
+   /** Fecha a conexão. */
+   close: (code?: number, reason?: string) => void
+   /** Contexto injetado no upgrade (ex: user autenticado). */
+   data: TData
+   readyState: number
+}
+
+export type WSHandlers<TData = unknown> = {
+   open?: (ws: WSContext<TData>) => void
+   message?: (ws: WSContext<TData>, data: string | Buffer) => void
+   close?: (ws: WSContext<TData>, code: number, reason: string) => void
+   error?: (ws: WSContext<TData>, err: Error) => void
+   /** Tamanho máximo de payload em bytes. Default: 64KB. */
+   maxPayload?: number
+   /** Intervalo de heartbeat em ms. Default: 30s. 0 = desativado. */
+   heartbeat?: number
+   /** Origens permitidas. Default: qualquer origem. */
+   allowedOrigins?: string[]
+}
+
+// ─── Rate Limit ───────────────────────────────────────────────────────────────
+
+export type RateLimitOptions = {
+   /** Janela de tempo em ms. Default: 60000 (1 min). */
+   windowMs?: number
+   /** Máximo de requests por janela. Default: 100. */
+   max?: number
+   /** Mensagem customizada no 429. */
+   message?: string
+   /**
+    * Se true, usa o header X-Forwarded-For pra extrair o IP real.
+    * ATENÇÃO: só ative se você confia no proxy. Default: false.
+    */
+   trustProxy?: boolean
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export type AuthFunction<TUser> = (
+   req: BunLikeRequest<TUser>,
+) => TUser | null | Promise<TUser | null>
+
+// ─── Serve Options ────────────────────────────────────────────────────────────
+
+export interface ServeOptions<TUser = unknown> {
+   port?: number
+   routes?: Routes<TUser>
+   /** Middlewares globais — rodam em toda request, em ordem. */
+   middleware?: Middleware<TUser>[]
+   /** Fallback quando nenhuma rota casa. */
+   fetch?: RouteHandler<TUser>
+   /** Handler de erros não tratados. */
+   error?: (err: unknown) => Response | Promise<Response>
+   /** Função de autenticação — injetada como req.user. */
+   auth?: AuthFunction<TUser>
+   rateLimit?: RateLimitOptions
+   websocket?: WSHandlers
 }
 
 // ─── Internal ─────────────────────────────────────────────────────────────────
 
-interface ParsedRoute {
-  path: string;
-  regex: RegExp;
-  keys: string[];
-  dynamic: boolean;
-  handler: RouteHandler | MethodMap;
+interface ParsedRoute<TUser> {
+   path: string
+   regex: RegExp
+   keys: string[]
+   dynamic: boolean
+   handler: RouteHandler<TUser> | MethodMap<TUser>
+}
+
+interface RateLimitEntry {
+   timestamps: number[]
+}
+
+// Símbolo interno pra sinalizar que é um upgrade request — nunca exposto
+const UPGRADE_SIGNAL = Symbol('ws.upgrade')
+
+interface UpgradeResponse extends Response {
+   [UPGRADE_SIGNAL]: unknown
+}
+
+// ─── Middleware helpers ────────────────────────────────────────────────────────
+
+/**
+ * Middleware pronto pra usar: bloqueia requests sem req.user com 401.
+ * @example
+ * routes: { '/admin': { middleware: [requireAuth], GET: handler } }
+ */
+export function requireAuth<TUser = unknown>(
+   req: BunLikeRequest<TUser>,
+): Response | null {
+   if (!req.user) return systemResponses[401]!(req)
+   return null
 }
 
 // ─── Server ───────────────────────────────────────────────────────────────────
 
-class Server {
-  #port: number;
-  #routes: ParsedRoute[];
-  #fallback: RouteHandler | undefined;
-  #errorHandler: ((err: unknown) => Response | Promise<Response>) | undefined;
-  #server: http.Server;
+class Server<TUser = unknown> {
+   #port: number
+   #routes: ParsedRoute<TUser>[]
+   #globalMiddleware: Middleware<TUser>[]
+   #fallback: RouteHandler<TUser> | undefined
+   #errorHandler: ((err: unknown) => Response | Promise<Response>) | undefined
+   #auth: AuthFunction<TUser> | undefined
+   #rateLimitOptions: Required<RateLimitOptions> | undefined
+   #rateLimitStore: Map<string, RateLimitEntry>
+   #wsHandlers: WSHandlers | undefined
+   #server: http.Server
 
-  constructor({ port = 3000, routes = {}, fetch: fallback, error: errorHandler }: ServeOptions = {}) {
-    this.#port = port;
-    this.#routes = this.#buildRouter(routes);
-    this.#fallback = fallback;
-    this.#errorHandler = errorHandler;
-    this.#server = this.#createServer();
-  }
+   constructor({
+      port = 3000,
+      routes = {},
+      middleware = [],
+      fetch: fallback,
+      error: errorHandler,
+      auth,
+      rateLimit,
+      websocket,
+   }: ServeOptions<TUser> = {}) {
+      this.#port = port
+      this.#routes = this.#buildRouter(routes)
+      this.#globalMiddleware = middleware
+      this.#fallback = fallback
+      this.#errorHandler = errorHandler
+      this.#auth = auth
+      this.#rateLimitOptions = rateLimit
+         ? {
+              windowMs: rateLimit.windowMs ?? 60_000,
+              max: rateLimit.max ?? 100,
+              message: rateLimit.message ?? 'Too Many Requests',
+              trustProxy: rateLimit.trustProxy ?? false,
+           }
+         : undefined
+      this.#rateLimitStore = new Map()
+      this.#wsHandlers = websocket
+      this.#server = this.#createServer()
+   }
 
-  #parseRoute(path: string): { regex: RegExp; keys: string[] } {
-    const keys: string[] = [];
-    const pattern = path
-      .replace(/\/\*/g, "(?:/.*)?")
-      .replace(/:([a-zA-Z_]+)/g, (_, key: string) => {
-        keys.push(key);
-        return "([^/]+)";
-      });
-    return { regex: new RegExp(`^${pattern}$`), keys };
-  }
+   // ── Roteamento ──────────────────────────────────────────────────────────────
 
-  #buildRouter(routes: Routes): ParsedRoute[] {
-    return Object.entries(routes)
-      .map(([path, handler]) => ({
-        path,
-        dynamic: path.includes(":") || path.includes("*"),
-        ...this.#parseRoute(path),
-        handler,
-      }))
-      .sort((a, b) => Number(a.dynamic) - Number(b.dynamic));
-  }
+   #parseRoute(path: string): { regex: RegExp; keys: string[] } {
+      const keys: string[] = []
+      const pattern = path
+         .replace(/\/\*/g, '(?:/.*)?')
+         .replace(/:([a-zA-Z_]+)/g, (_, key: string) => {
+            keys.push(key)
+            return '([^/]+)'
+         })
+      return { regex: new RegExp(`^${pattern}$`), keys }
+   }
 
-  #extractParams(match: RegExpMatchArray, keys: string[]): Record<string, string> {
-    return keys.reduce<Record<string, string>>((acc, key, i) => {
-      acc[key] = match[i + 1]!;
-      return acc;
-    }, {});
-  }
+   #buildRouter(routes: Routes<TUser>): ParsedRoute<TUser>[] {
+      return Object.entries(routes)
+         .map(([path, handler]) => ({
+            path,
+            dynamic: path.includes(':') || path.includes('*'),
+            ...this.#parseRoute(path),
+            handler,
+         }))
+         .sort((a, b) => Number(a.dynamic) - Number(b.dynamic))
+   }
 
-  #readBody(nodeReq: http.IncomingMessage, limit = 1e6): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      let size = 0;
+   #extractParams(
+      match: RegExpMatchArray,
+      keys: string[],
+   ): Record<string, string> {
+      return keys.reduce<Record<string, string>>((acc, key, i) => {
+         acc[key] = match[i + 1]!
+         return acc
+      }, {})
+   }
 
-      nodeReq.on("data", (chunk: Buffer) => {
-        size += chunk.length;
-        if (size > limit) {
-          reject(new Error("Payload too large"));
-          nodeReq.destroy();
-          return;
-        }
-        chunks.push(chunk);
-      });
+   // ── Rate Limit (Sliding Window) ─────────────────────────────────────────────
 
-      nodeReq.on("end", () => resolve(Buffer.concat(chunks)));
-    });
-  }
-
-  async #sendResponse(nodeRes: http.ServerResponse, response: Response): Promise<void> {
-    const headers: Record<string, string> = {};
-    response.headers.forEach((value, key) => { headers[key] = value; });
-    nodeRes.writeHead(response.status, headers);
-    const body = await response.arrayBuffer();
-    nodeRes.end(Buffer.from(body));
-  }
-
-  #createServer(): http.Server {
-    return http.createServer(async (nodeReq: http.IncomingMessage, nodeRes: http.ServerResponse) => {
-      try {
-        const host = nodeReq.headers.host ?? "localhost";
-        const url = `http://${host}${nodeReq.url}`;
-        const method = nodeReq.method!.toUpperCase();
-        const pathname = new URL(url).pathname;
-
-        const bodyBuffer = await this.#readBody(nodeReq);
-
-        const hasBody = !["GET", "HEAD"].includes(method) && bodyBuffer.length > 0;
-        const init: RequestInit = {
-          method,
-          headers: nodeReq.headers as HeadersInit,
-        };
-
-        if (hasBody) {
-          init.body = new Uint8Array(bodyBuffer);
-        }
-
-        const request = new Request(url, init) as BunLikeRequest;
-
-        request.params = {};
-
-        let response: Response | null = null;
-
-        for (const route of this.#routes) {
-          const match = pathname.match(route.regex);
-          if (!match) continue;
-
-          request.params = this.#extractParams(match, route.keys);
-          const { handler } = route;
-
-          if (typeof handler === "object") {
-            const methodHandler = (handler as MethodMap)[method as keyof MethodMap];
-            response = methodHandler
-              ? await methodHandler(request)
-              : new Response("Method Not Allowed", { status: 405 });
-            break;
-          }
-
-          response = await handler(request);
-          break;
-        }
-
-        if (!response && this.#fallback) response = await this.#fallback(request);
-        if (!response) response = new Response("Not Found", { status: 404 });
-
-        await this.#sendResponse(nodeRes, response);
-      } catch (err) {
-        if (this.#errorHandler) {
-          try {
-            await this.#sendResponse(nodeRes, await this.#errorHandler(err));
-          } catch {
-            nodeRes.writeHead(500);
-            nodeRes.end("Internal Server Error");
-          }
-        } else {
-          nodeRes.writeHead(500);
-          nodeRes.end("Internal Server Error");
-        }
+   #extractIp(nodeReq: http.IncomingMessage): string {
+      if (this.#rateLimitOptions?.trustProxy) {
+         const forwarded = nodeReq.headers['x-forwarded-for']
+         if (forwarded) {
+            // Pega o primeiro IP da lista (mais próximo do cliente)
+            const ip = Array.isArray(forwarded)
+               ? forwarded[0]
+               : forwarded.split(',')[0]
+            if (ip) return ip.trim()
+         }
       }
-    });
-  }
+      return nodeReq.socket.remoteAddress ?? 'unknown'
+   }
 
-  get url(): URL {
-    return new URL(`http://localhost:${this.#port}`);
-  }
+   #checkRateLimit(ip: string): RateLimitResult {
+      const opts = this.#rateLimitOptions!
+      const now = Date.now()
+      const windowStart = now - opts.windowMs
 
-  listen(): this {
-    this.#server.listen(this.#port, () =>
-      console.log(`Rodando em http://localhost:${this.#port}`)
-    );
-    return this;
-  }
+      const entry = this.#rateLimitStore.get(ip) ?? { timestamps: [] }
 
-  stop(): Promise<void> {
-    return new Promise((resolve, reject) =>
-      this.#server.close((err?: Error) => (err ? reject(err) : resolve()))
-    );
-  }
+      // Remove timestamps fora da janela deslizante
+      entry.timestamps = entry.timestamps.filter(t => t > windowStart)
+
+      const remaining = Math.max(0, opts.max - entry.timestamps.length)
+      // Reset = quando o timestamp mais antigo sair da janela
+      const oldestTimestamp = entry.timestamps[0]
+      const reset = oldestTimestamp
+         ? Math.ceil((oldestTimestamp + opts.windowMs) / 1000)
+         : Math.ceil((now + opts.windowMs) / 1000)
+
+      if (entry.timestamps.length >= opts.max) {
+         this.#rateLimitStore.set(ip, entry)
+         return {
+            allowed: false,
+            limit: opts.max,
+            remaining: 0,
+            reset,
+            retryAfter: Math.ceil(
+               (oldestTimestamp! + opts.windowMs - now) / 1000,
+            ),
+         }
+      }
+
+      entry.timestamps.push(now)
+      this.#rateLimitStore.set(ip, entry)
+
+      return { allowed: true, limit: opts.max, remaining: remaining - 1, reset }
+   }
+
+   #applyRateLimitHeaders(
+      nodeRes: http.ServerResponse,
+      info: RateLimitResult,
+   ): void {
+      nodeRes.setHeader('X-RateLimit-Limit', info.limit)
+      nodeRes.setHeader('X-RateLimit-Remaining', info.remaining)
+      nodeRes.setHeader('X-RateLimit-Reset', info.reset)
+      if (info.retryAfter !== undefined) {
+         nodeRes.setHeader('Retry-After', info.retryAfter)
+      }
+   }
+
+   // ── Middleware Chain ────────────────────────────────────────────────────────
+
+   async #runMiddlewareChain(
+      middlewares: Middleware<TUser>[],
+      req: BunLikeRequest<TUser>,
+   ): Promise<Response | null> {
+      for (const mw of middlewares) {
+         const result = await mw(req)
+         // Qualquer resposta não-null curto-circuita a chain
+         if (result !== null) return result
+      }
+      return null
+   }
+
+   // ── I/O ────────────────────────────────────────────────────────────────────
+
+   #readBody(nodeReq: http.IncomingMessage, limit = 1e6): Promise<Buffer> {
+      return new Promise((resolve, reject) => {
+         const chunks: Buffer[] = []
+         let size = 0
+
+         nodeReq.on('data', (chunk: Buffer) => {
+            size += chunk.length
+            if (size > limit) {
+               reject(new Error('Payload too large'))
+               nodeReq.destroy()
+               return
+            }
+            chunks.push(chunk)
+         })
+
+         nodeReq.on('end', () => resolve(Buffer.concat(chunks)))
+      })
+   }
+
+   async #sendResponse(
+      nodeRes: http.ServerResponse,
+      response: Response,
+   ): Promise<void> {
+      const headers: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+         headers[key] = value
+      })
+      nodeRes.writeHead(response.status, headers)
+      const body = await response.arrayBuffer()
+      nodeRes.end(Buffer.from(body))
+   }
+
+   // ── WebSocket ───────────────────────────────────────────────────────────────
+
+   #handleWebSocketUpgrade(
+      nodeReq: http.IncomingMessage,
+      socket: import('net').Socket,
+      head: Buffer,
+      upgradeData: unknown,
+   ): void {
+      const handlers = this.#wsHandlers!
+      const maxPayload = handlers.maxPayload ?? 64 * 1024
+      const heartbeatInterval = handlers.heartbeat ?? 30_000
+
+      // ── Handshake ────────────────────────────────────────────────────────────
+      const key = nodeReq.headers['sec-websocket-key']
+      if (!key) {
+         socket.destroy()
+         return
+      }
+
+      const acceptKey = crypto
+         .createHash('sha1')
+         .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+         .digest('base64')
+
+      socket.write(
+         'HTTP/1.1 101 Switching Protocols\r\n' +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            `Sec-WebSocket-Accept: ${acceptKey}\r\n` +
+            '\r\n',
+      )
+
+      // ── Contexto da conexão ──────────────────────────────────────────────────
+      const ws: WSContext<unknown> = {
+         data: upgradeData,
+         readyState: 1, // OPEN
+         send(data) {
+            if (ws.readyState !== 1) return
+            const payload = Buffer.isBuffer(data) ? data : Buffer.from(data)
+            const frame = encodeWSFrame(
+               payload,
+               typeof data === 'string' ? 0x1 : 0x2,
+            )
+            socket.write(frame)
+         },
+         close(code = 1000, reason = '') {
+            if (ws.readyState !== 1) return
+            ws.readyState = 2 // CLOSING
+            const payload = Buffer.alloc(2 + Buffer.byteLength(reason))
+            payload.writeUInt16BE(code, 0)
+            Buffer.from(reason).copy(payload, 2)
+            socket.write(encodeWSFrame(payload, 0x8))
+            socket.end()
+         },
+      }
+
+      handlers.open?.(ws)
+
+      // ── Heartbeat ────────────────────────────────────────────────────────────
+      let heartbeatTimer: NodeJS.Timeout | undefined
+      let missedPong = false
+
+      if (heartbeatInterval > 0) {
+         heartbeatTimer = setInterval(() => {
+            if (missedPong) {
+               ws.readyState = 3
+               socket.destroy()
+               return
+            }
+            missedPong = true
+            // Envia frame PING
+            socket.write(encodeWSFrame(Buffer.alloc(0), 0x9))
+         }, heartbeatInterval)
+      }
+
+      // ── Parser de frames ─────────────────────────────────────────────────────
+      let buffer = Buffer.alloc(0)
+
+      socket.on('data', (chunk: Buffer) => {
+         buffer = Buffer.concat([buffer, chunk])
+
+         while (buffer.length >= 2) {
+            const firstByte = buffer[0]!
+            const secondByte = buffer[1]!
+
+            const opcode = firstByte & 0x0f
+            const masked = (secondByte & 0x80) !== 0
+            let payloadLength = secondByte & 0x7f
+            let headerLength = 2
+
+            if (payloadLength === 126) {
+               if (buffer.length < 4) return
+               payloadLength = buffer.readUInt16BE(2)
+               headerLength = 4
+            } else if (payloadLength === 127) {
+               if (buffer.length < 10) return
+               // Ignora os primeiros 4 bytes (muito grande pra JS safe integer)
+               payloadLength = buffer.readUInt32BE(6)
+               headerLength = 10
+            }
+
+            if (payloadLength > maxPayload) {
+               handlers.error?.(
+                  ws,
+                  new Error(`Payload excede o limite de ${maxPayload} bytes`),
+               )
+               ws.close(1009, 'Message too big')
+               return
+            }
+
+            const maskLength = masked ? 4 : 0
+            const totalLength = headerLength + maskLength + payloadLength
+            if (buffer.length < totalLength) return
+
+            const maskKey = masked
+               ? buffer.slice(headerLength, headerLength + 4)
+               : null
+            let payload = buffer.slice(headerLength + maskLength, totalLength)
+
+            if (masked && maskKey) {
+               payload = Buffer.from(payload)
+               for (let i = 0; i < payload.length; i++) {
+                  payload[i] = payload[i]! ^ maskKey[i % 4]!
+               }
+            }
+
+            buffer = buffer.slice(totalLength)
+
+            switch (opcode) {
+               case 0x1: // Text
+                  handlers.message?.(ws, payload.toString('utf8'))
+                  break
+               case 0x2: // Binary
+                  handlers.message?.(ws, payload)
+                  break
+               case 0x8: {
+                  // Close
+                  const code =
+                     payload.length >= 2 ? payload.readUInt16BE(0) : 1000
+                  const reason =
+                     payload.length > 2 ? payload.slice(2).toString() : ''
+                  ws.readyState = 3 // CLOSED
+                  clearInterval(heartbeatTimer)
+                  handlers.close?.(ws, code, reason)
+                  socket.end()
+                  break
+               }
+               case 0x9: // Ping — responde com Pong
+                  socket.write(encodeWSFrame(payload, 0xa))
+                  break
+               case 0xa: // Pong
+                  missedPong = false
+                  break
+            }
+         }
+      })
+
+      socket.on('error', err => {
+         clearInterval(heartbeatTimer)
+         ws.readyState = 3
+         handlers.error?.(ws, err)
+      })
+
+      socket.on('close', () => {
+         clearInterval(heartbeatTimer)
+         if (ws.readyState !== 3) {
+            ws.readyState = 3
+            handlers.close?.(ws, 1006, 'Connection lost')
+         }
+      })
+   }
+
+   // ── Request Handler ─────────────────────────────────────────────────────────
+
+   #createServer(): http.Server {
+      const server = http.createServer(
+         async (
+            nodeReq: http.IncomingMessage,
+            nodeRes: http.ServerResponse,
+         ) => {
+            try {
+               const host = nodeReq.headers.host ?? 'localhost'
+               const url = `http://${host}${nodeReq.url}`
+               const method = nodeReq.method!.toUpperCase()
+               const pathname = new URL(url).pathname
+
+               // ── Rate Limit ─────────────────────────────────────────────────────
+               if (this.#rateLimitOptions) {
+                  const ip = this.#extractIp(nodeReq)
+                  const rl = this.#checkRateLimit(ip)
+                  this.#applyRateLimitHeaders(nodeRes, rl)
+
+                  if (!rl.allowed) {
+                     const res = systemResponses[429]!(
+                        { url },
+                        this.#rateLimitOptions.message,
+                     )
+                     await this.#sendResponse(nodeRes, res)
+                     return
+                  }
+               }
+
+               // ── Body ───────────────────────────────────────────────────────────
+               const bodyBuffer = await this.#readBody(nodeReq)
+               const hasBody =
+                  !['GET', 'HEAD'].includes(method) && bodyBuffer.length > 0
+               const init: RequestInit = {
+                  method,
+                  headers: nodeReq.headers as HeadersInit,
+               }
+               if (hasBody) init.body = new Uint8Array(bodyBuffer)
+
+               // ── Request object ─────────────────────────────────────────────────
+               let upgradeData: unknown = undefined
+               let upgradeRequested = false
+
+               const request = new Request(url, init) as BunLikeRequest<TUser>
+               request.params = {}
+               request.user = null
+
+               // req.upgrade() — sinaliza internamente sem quebrar o tipo público
+               request.upgrade = (data?: unknown): Response => {
+                  upgradeData = data
+                  upgradeRequested = true
+                  const res = new Response(null, {
+                     status: 101,
+                  }) as UpgradeResponse
+                  ;(res as unknown as Record<symbol, unknown>)[UPGRADE_SIGNAL] =
+                     data
+                  return res
+               }
+
+               // ── Auth ───────────────────────────────────────────────────────────
+               if (this.#auth) {
+                  request.user = await this.#auth(request)
+               }
+
+               // ── Global Middlewares ─────────────────────────────────────────────
+               const globalResult = await this.#runMiddlewareChain(
+                  this.#globalMiddleware,
+                  request,
+               )
+               if (globalResult) {
+                  await this.#sendResponse(nodeRes, globalResult)
+                  return
+               }
+
+               // ── Routing ────────────────────────────────────────────────────────
+               let response: Response | null = null
+
+               for (const route of this.#routes) {
+                  const match = pathname.match(route.regex)
+                  if (!match) continue
+
+                  request.params = this.#extractParams(match, route.keys)
+                  const { handler } = route
+
+                  if (typeof handler === 'object') {
+                     // Middlewares de rota
+                     const routeMiddleware = handler.middleware ?? []
+                     const routeResult = await this.#runMiddlewareChain(
+                        routeMiddleware,
+                        request,
+                     )
+                     if (routeResult) {
+                        await this.#sendResponse(nodeRes, routeResult)
+                        return
+                     }
+
+                     const methodHandler = (handler as MethodMap<TUser>)[
+                        method as keyof MethodMap<TUser>
+                     ]
+
+                     if (typeof methodHandler === 'function') {
+                        response = await methodHandler(request)
+                     } else {
+                        response = systemResponses[405]!(request)
+                     }
+
+                     break
+                  }
+
+                  response = await handler(request)
+                  break
+               }
+
+               // ── WebSocket Upgrade ──────────────────────────────────────────────
+               if (upgradeRequested) {
+                  // Resposta 101 é tratada pelo evento 'upgrade' do servidor
+                  // Armazenamos o upgradeData pra usar quando o evento disparar
+                  ;(
+                     nodeReq as unknown as Record<string, unknown>
+                  ).__upgradeData = upgradeData
+                  return
+               }
+
+               // ── Fallback ───────────────────────────────────────────────────────
+               if (!response && this.#fallback)
+                  response = await this.#fallback(request)
+               response ??= systemResponses[404]!(request)
+
+               await this.#sendResponse(nodeRes, response)
+            } catch (err) {
+               try {
+                  const errResponse =
+                     (await this.#errorHandler?.(err)) ??
+                     systemResponses[500]!({
+                        url: `http://${nodeReq.headers.host ?? 'localhost'}${nodeReq.url}`,
+                     })
+                  await this.#sendResponse(nodeRes, errResponse)
+               } catch {
+                  nodeRes.writeHead(500)
+                  nodeRes.end('Internal Server Error')
+               }
+            }
+         },
+      )
+
+      // ── WebSocket upgrade event ──────────────────────────────────────────────
+      if (this.#wsHandlers) {
+         server.on(
+            'upgrade',
+            (
+               nodeReq: http.IncomingMessage,
+               socket: import('net').Socket,
+               head: Buffer,
+            ) => {
+               // Verifica origin se allowedOrigins está configurado
+               const allowedOrigins = this.#wsHandlers!.allowedOrigins
+               if (allowedOrigins && allowedOrigins.length > 0) {
+                  const origin = nodeReq.headers['origin'] ?? ''
+                  if (!allowedOrigins.includes(origin)) {
+                     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+                     socket.destroy()
+                     return
+                  }
+               }
+
+               // Rate limit também se aplica ao WS
+               if (this.#rateLimitOptions) {
+                  const ip = this.#extractIp(nodeReq)
+                  const rl = this.#checkRateLimit(ip)
+                  if (!rl.allowed) {
+                     socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n')
+                     socket.destroy()
+                     return
+                  }
+               }
+
+               const upgradeData = (
+                  nodeReq as unknown as Record<string, unknown>
+               ).__upgradeData
+
+               this.#handleWebSocketUpgrade(nodeReq, socket, head, upgradeData)
+            },
+         )
+      }
+
+      return server
+   }
+
+   get url(): URL {
+      return new URL(`http://localhost:${this.#port}`)
+   }
+
+   listen(): this {
+      this.#server.listen(this.#port, () =>
+         console.log(`Rodando em http://localhost:${this.#port}`),
+      )
+      return this
+   }
+
+   stop(): Promise<void> {
+      return new Promise((resolve, reject) =>
+         this.#server.close((err?: Error) => (err ? reject(err) : resolve())),
+      )
+   }
 }
+
+// ─── WebSocket frame encoder ──────────────────────────────────────────────────
+
+function encodeWSFrame(payload: Buffer, opcode: number): Buffer {
+   const length = payload.length
+   let header: Buffer
+
+   if (length < 126) {
+      header = Buffer.alloc(2)
+      header[0] = 0x80 | opcode // FIN + opcode
+      header[1] = length
+   } else if (length < 65536) {
+      header = Buffer.alloc(4)
+      header[0] = 0x80 | opcode
+      header[1] = 126
+      header.writeUInt16BE(length, 2)
+   } else {
+      header = Buffer.alloc(10)
+      header[0] = 0x80 | opcode
+      header[1] = 127
+      header.writeUInt32BE(0, 2)
+      header.writeUInt32BE(length, 6)
+   }
+
+   return Buffer.concat([header, payload])
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
 
 /**
  * Cria e inicia um servidor HTTP com roteamento estilo Bun.
@@ -190,24 +858,45 @@ class Server {
  * @example
  * import { serve } from 'data-handlers/serve'
  *
+ * const myAuth = async (req) => {
+ *   const token = req.headers.get('authorization')?.replace('Bearer ', '')
+ *   return token ? verifyToken(token) : null
+ * }
+ *
  * serve({
  *   port: 3000,
+ *   auth: myAuth,
+ *   middleware: [logger],
+ *   rateLimit: { windowMs: 60_000, max: 100 },
  *   routes: {
  *     '/users': {
- *       GET:  (req) => Response.json(users),
+ *       GET: (req) => Response.json(users),
  *       POST: async (req) => {
  *         const body = await req.json()
  *         return Response.json(body, { status: 201 })
  *       }
  *     },
- *     '/users/:id': {
- *       GET: (req) => Response.json({ id: req.params.id })
+ *     '/admin': {
+ *       middleware: [requireAuth],
+ *       GET: (req) => Response.json({ user: req.user })
+ *     },
+ *     '/chat': {
+ *       GET: (req) => req.upgrade({ user: req.user })
  *     }
+ *   },
+ *   websocket: {
+ *     allowedOrigins: ['https://meusite.com'],
+ *     maxPayload: 64 * 1024,
+ *     heartbeat: 30_000,
+ *     open:    (ws) => console.log('conectou:', ws.data),
+ *     message: (ws, data) => ws.send(`eco: ${data}`),
+ *     close:   (ws, code) => console.log('desconectou:', code),
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
  * })
  */
-export function serve(options?: ServeOptions): Server {
-  return new Server(options).listen();
+export function serve<TUser = unknown>(
+   options?: ServeOptions<TUser>,
+): Server<TUser> {
+   return new Server(options).listen()
 }
-

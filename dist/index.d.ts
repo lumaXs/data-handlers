@@ -1,8 +1,8 @@
 import { registry, formatType, register, registerAliases, createPlugin } from './src/main.js';
 import './plugins/index.js';
 export type { HandlerFn } from './src/main.js';
-export type { ValidateResult, TypeAccessor, HandlersMeta, HandlersProxy } from './api/handlers.js';
-export type { FieldConfig, SchemaShape, InferSchema, SchemaParseResult } from './schema/index.js';
+export type { ValidateResult, TypeAccessor, HandlersMeta, HandlersProxy, } from './api/handlers.js';
+export type { FieldConfig, SchemaShape, InferSchema, SchemaParseResult, } from './schema/index.js';
 export type { NameHandlerOptions } from './handlers/nameHandler.js';
 export type { NumberHandlerOptions } from './handlers/numberHandler.js';
 export type { DateHandlerOptions, DateInput } from './handlers/dateHandler.js';
@@ -33,7 +33,7 @@ export interface ValidateParams<TValue = unknown> {
  * @example
  * normalize({ type: 'name', value: '  joao  ' }) // 'Joao'
  */
-export declare function normalize<TValue = unknown>({ type, value, options }: NormalizeParams<TValue>): string;
+export declare function normalize<TValue = unknown>({ type, value, options, }: NormalizeParams<TValue>): string;
 /**
  * Valida sem lançar. Retorna `{ valid, value, error }`.
  *
@@ -41,7 +41,7 @@ export declare function normalize<TValue = unknown>({ type, value, options }: No
  * validate({ type: 'cpf', value: '111.444.777-35' })
  * // { valid: true, value: '111.444.777-35', error: null }
  */
-export declare function validate<TValue = unknown>({ type, value, options }: ValidateParams<TValue>): {
+export declare function validate<TValue = unknown>({ type, value, options, }: ValidateParams<TValue>): {
     valid: boolean;
     value: string;
     error: null;

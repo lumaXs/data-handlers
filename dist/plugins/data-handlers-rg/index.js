@@ -3,7 +3,10 @@ const rgHandler = (value, options = {}) => {
     if (typeof value !== 'string' && typeof value !== 'number') {
         throw new TypeError(`[normalize:rg] Expected string or number. Received: ${typeof value}`);
     }
-    const raw = String(value).trim().toUpperCase().replace(/[.\-\s]/g, '');
+    const raw = String(value)
+        .trim()
+        .toUpperCase()
+        .replace(/[.\-\s]/g, '');
     if (!/^\d{7,9}$|^\d{8}X$/.test(raw)) {
         throw new TypeError(`[normalize:rg] Invalid RG format. Expected 7-9 digits (optionally ending in X). Received: ${value}`);
     }

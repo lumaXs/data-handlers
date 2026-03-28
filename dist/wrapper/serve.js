@@ -1,25 +1,123 @@
-import http from "http";
+import http from 'http';
+import crypto from 'crypto';
+// ─── Utilitários de segurança ──────────────────────────────────────────────────
+/**
+ * Compara duas strings de forma segura contra timing attacks.
+ * Sempre leva o mesmo tempo independente de onde a string difere.
+ */
+export function safeCompare(a, b) {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) {
+        // Executa a comparação mesmo assim pra não vazar o tamanho via timing
+        crypto.timingSafeEqual(bufA, bufA);
+        return false;
+    }
+    return crypto.timingSafeEqual(bufA, bufB);
+}
+export const systemResponses = {
+    400: (req, message = 'Invalid request body') => Response.json({
+        statusCode: 400,
+        error: 'Bad Request',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 400 }),
+    401: (req, message = 'Access not allowed') => Response.json({
+        statusCode: 401,
+        error: 'Unauthorized',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 401 }),
+    403: (req, message = 'Forbidden') => Response.json({
+        statusCode: 403,
+        error: 'Forbidden',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 403 }),
+    404: (req, message = 'Not Found') => Response.json({
+        statusCode: 404,
+        error: 'Not Found',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 404 }),
+    405: (req, message = 'Method Not Allowed') => Response.json({
+        statusCode: 405,
+        error: 'Method Not Allowed',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 405 }),
+    429: (req, message = 'Too Many Requests') => Response.json({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 429 }),
+    500: (req, message = 'Internal Server Error') => Response.json({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 500 }),
+};
+// Símbolo interno pra sinalizar que é um upgrade request — nunca exposto
+const UPGRADE_SIGNAL = Symbol('ws.upgrade');
+// ─── Middleware helpers ────────────────────────────────────────────────────────
+/**
+ * Middleware pronto pra usar: bloqueia requests sem req.user com 401.
+ * @example
+ * routes: { '/admin': { middleware: [requireAuth], GET: handler } }
+ */
+export function requireAuth(req) {
+    if (!req.user)
+        return systemResponses[401](req);
+    return null;
+}
 // ─── Server ───────────────────────────────────────────────────────────────────
 class Server {
     #port;
     #routes;
+    #globalMiddleware;
     #fallback;
     #errorHandler;
+    #auth;
+    #rateLimitOptions;
+    #rateLimitStore;
+    #wsHandlers;
     #server;
-    constructor({ port = 3000, routes = {}, fetch: fallback, error: errorHandler } = {}) {
+    constructor({ port = 3000, routes = {}, middleware = [], fetch: fallback, error: errorHandler, auth, rateLimit, websocket, } = {}) {
         this.#port = port;
         this.#routes = this.#buildRouter(routes);
+        this.#globalMiddleware = middleware;
         this.#fallback = fallback;
         this.#errorHandler = errorHandler;
+        this.#auth = auth;
+        this.#rateLimitOptions = rateLimit
+            ? {
+                windowMs: rateLimit.windowMs ?? 60_000,
+                max: rateLimit.max ?? 100,
+                message: rateLimit.message ?? 'Too Many Requests',
+                trustProxy: rateLimit.trustProxy ?? false,
+            }
+            : undefined;
+        this.#rateLimitStore = new Map();
+        this.#wsHandlers = websocket;
         this.#server = this.#createServer();
     }
+    // ── Roteamento ──────────────────────────────────────────────────────────────
     #parseRoute(path) {
         const keys = [];
         const pattern = path
-            .replace(/\/\*/g, "(?:/.*)?")
+            .replace(/\/\*/g, '(?:/.*)?')
             .replace(/:([a-zA-Z_]+)/g, (_, key) => {
             keys.push(key);
-            return "([^/]+)";
+            return '([^/]+)';
         });
         return { regex: new RegExp(`^${pattern}$`), keys };
     }
@@ -27,7 +125,7 @@ class Server {
         return Object.entries(routes)
             .map(([path, handler]) => ({
             path,
-            dynamic: path.includes(":") || path.includes("*"),
+            dynamic: path.includes(':') || path.includes('*'),
             ...this.#parseRoute(path),
             handler,
         }))
@@ -39,47 +137,289 @@ class Server {
             return acc;
         }, {});
     }
+    // ── Rate Limit (Sliding Window) ─────────────────────────────────────────────
+    #extractIp(nodeReq) {
+        if (this.#rateLimitOptions?.trustProxy) {
+            const forwarded = nodeReq.headers['x-forwarded-for'];
+            if (forwarded) {
+                // Pega o primeiro IP da lista (mais próximo do cliente)
+                const ip = Array.isArray(forwarded)
+                    ? forwarded[0]
+                    : forwarded.split(',')[0];
+                if (ip)
+                    return ip.trim();
+            }
+        }
+        return nodeReq.socket.remoteAddress ?? 'unknown';
+    }
+    #checkRateLimit(ip) {
+        const opts = this.#rateLimitOptions;
+        const now = Date.now();
+        const windowStart = now - opts.windowMs;
+        const entry = this.#rateLimitStore.get(ip) ?? { timestamps: [] };
+        // Remove timestamps fora da janela deslizante
+        entry.timestamps = entry.timestamps.filter(t => t > windowStart);
+        const remaining = Math.max(0, opts.max - entry.timestamps.length);
+        // Reset = quando o timestamp mais antigo sair da janela
+        const oldestTimestamp = entry.timestamps[0];
+        const reset = oldestTimestamp
+            ? Math.ceil((oldestTimestamp + opts.windowMs) / 1000)
+            : Math.ceil((now + opts.windowMs) / 1000);
+        if (entry.timestamps.length >= opts.max) {
+            this.#rateLimitStore.set(ip, entry);
+            return {
+                allowed: false,
+                limit: opts.max,
+                remaining: 0,
+                reset,
+                retryAfter: Math.ceil((oldestTimestamp + opts.windowMs - now) / 1000),
+            };
+        }
+        entry.timestamps.push(now);
+        this.#rateLimitStore.set(ip, entry);
+        return { allowed: true, limit: opts.max, remaining: remaining - 1, reset };
+    }
+    #applyRateLimitHeaders(nodeRes, info) {
+        nodeRes.setHeader('X-RateLimit-Limit', info.limit);
+        nodeRes.setHeader('X-RateLimit-Remaining', info.remaining);
+        nodeRes.setHeader('X-RateLimit-Reset', info.reset);
+        if (info.retryAfter !== undefined) {
+            nodeRes.setHeader('Retry-After', info.retryAfter);
+        }
+    }
+    // ── Middleware Chain ────────────────────────────────────────────────────────
+    async #runMiddlewareChain(middlewares, req) {
+        for (const mw of middlewares) {
+            const result = await mw(req);
+            // Qualquer resposta não-null curto-circuita a chain
+            if (result !== null)
+                return result;
+        }
+        return null;
+    }
+    // ── I/O ────────────────────────────────────────────────────────────────────
     #readBody(nodeReq, limit = 1e6) {
         return new Promise((resolve, reject) => {
             const chunks = [];
             let size = 0;
-            nodeReq.on("data", (chunk) => {
+            nodeReq.on('data', (chunk) => {
                 size += chunk.length;
                 if (size > limit) {
-                    reject(new Error("Payload too large"));
+                    reject(new Error('Payload too large'));
                     nodeReq.destroy();
                     return;
                 }
                 chunks.push(chunk);
             });
-            nodeReq.on("end", () => resolve(Buffer.concat(chunks)));
+            nodeReq.on('end', () => resolve(Buffer.concat(chunks)));
         });
     }
     async #sendResponse(nodeRes, response) {
         const headers = {};
-        response.headers.forEach((value, key) => { headers[key] = value; });
+        response.headers.forEach((value, key) => {
+            headers[key] = value;
+        });
         nodeRes.writeHead(response.status, headers);
         const body = await response.arrayBuffer();
         nodeRes.end(Buffer.from(body));
     }
+    // ── WebSocket ───────────────────────────────────────────────────────────────
+    #handleWebSocketUpgrade(nodeReq, socket, head, upgradeData) {
+        const handlers = this.#wsHandlers;
+        const maxPayload = handlers.maxPayload ?? 64 * 1024;
+        const heartbeatInterval = handlers.heartbeat ?? 30_000;
+        // ── Handshake ────────────────────────────────────────────────────────────
+        const key = nodeReq.headers['sec-websocket-key'];
+        if (!key) {
+            socket.destroy();
+            return;
+        }
+        const acceptKey = crypto
+            .createHash('sha1')
+            .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+            .digest('base64');
+        socket.write('HTTP/1.1 101 Switching Protocols\r\n' +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            `Sec-WebSocket-Accept: ${acceptKey}\r\n` +
+            '\r\n');
+        // ── Contexto da conexão ──────────────────────────────────────────────────
+        const ws = {
+            data: upgradeData,
+            readyState: 1, // OPEN
+            send(data) {
+                if (ws.readyState !== 1)
+                    return;
+                const payload = Buffer.isBuffer(data) ? data : Buffer.from(data);
+                const frame = encodeWSFrame(payload, typeof data === 'string' ? 0x1 : 0x2);
+                socket.write(frame);
+            },
+            close(code = 1000, reason = '') {
+                if (ws.readyState !== 1)
+                    return;
+                ws.readyState = 2; // CLOSING
+                const payload = Buffer.alloc(2 + Buffer.byteLength(reason));
+                payload.writeUInt16BE(code, 0);
+                Buffer.from(reason).copy(payload, 2);
+                socket.write(encodeWSFrame(payload, 0x8));
+                socket.end();
+            },
+        };
+        handlers.open?.(ws);
+        // ── Heartbeat ────────────────────────────────────────────────────────────
+        let heartbeatTimer;
+        let missedPong = false;
+        if (heartbeatInterval > 0) {
+            heartbeatTimer = setInterval(() => {
+                if (missedPong) {
+                    ws.readyState = 3;
+                    socket.destroy();
+                    return;
+                }
+                missedPong = true;
+                // Envia frame PING
+                socket.write(encodeWSFrame(Buffer.alloc(0), 0x9));
+            }, heartbeatInterval);
+        }
+        // ── Parser de frames ─────────────────────────────────────────────────────
+        let buffer = Buffer.alloc(0);
+        socket.on('data', (chunk) => {
+            buffer = Buffer.concat([buffer, chunk]);
+            while (buffer.length >= 2) {
+                const firstByte = buffer[0];
+                const secondByte = buffer[1];
+                const opcode = firstByte & 0x0f;
+                const masked = (secondByte & 0x80) !== 0;
+                let payloadLength = secondByte & 0x7f;
+                let headerLength = 2;
+                if (payloadLength === 126) {
+                    if (buffer.length < 4)
+                        return;
+                    payloadLength = buffer.readUInt16BE(2);
+                    headerLength = 4;
+                }
+                else if (payloadLength === 127) {
+                    if (buffer.length < 10)
+                        return;
+                    // Ignora os primeiros 4 bytes (muito grande pra JS safe integer)
+                    payloadLength = buffer.readUInt32BE(6);
+                    headerLength = 10;
+                }
+                if (payloadLength > maxPayload) {
+                    handlers.error?.(ws, new Error(`Payload excede o limite de ${maxPayload} bytes`));
+                    ws.close(1009, 'Message too big');
+                    return;
+                }
+                const maskLength = masked ? 4 : 0;
+                const totalLength = headerLength + maskLength + payloadLength;
+                if (buffer.length < totalLength)
+                    return;
+                const maskKey = masked
+                    ? buffer.slice(headerLength, headerLength + 4)
+                    : null;
+                let payload = buffer.slice(headerLength + maskLength, totalLength);
+                if (masked && maskKey) {
+                    payload = Buffer.from(payload);
+                    for (let i = 0; i < payload.length; i++) {
+                        payload[i] = payload[i] ^ maskKey[i % 4];
+                    }
+                }
+                buffer = buffer.slice(totalLength);
+                switch (opcode) {
+                    case 0x1: // Text
+                        handlers.message?.(ws, payload.toString('utf8'));
+                        break;
+                    case 0x2: // Binary
+                        handlers.message?.(ws, payload);
+                        break;
+                    case 0x8: {
+                        // Close
+                        const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1000;
+                        const reason = payload.length > 2 ? payload.slice(2).toString() : '';
+                        ws.readyState = 3; // CLOSED
+                        clearInterval(heartbeatTimer);
+                        handlers.close?.(ws, code, reason);
+                        socket.end();
+                        break;
+                    }
+                    case 0x9: // Ping — responde com Pong
+                        socket.write(encodeWSFrame(payload, 0xa));
+                        break;
+                    case 0xa: // Pong
+                        missedPong = false;
+                        break;
+                }
+            }
+        });
+        socket.on('error', err => {
+            clearInterval(heartbeatTimer);
+            ws.readyState = 3;
+            handlers.error?.(ws, err);
+        });
+        socket.on('close', () => {
+            clearInterval(heartbeatTimer);
+            if (ws.readyState !== 3) {
+                ws.readyState = 3;
+                handlers.close?.(ws, 1006, 'Connection lost');
+            }
+        });
+    }
+    // ── Request Handler ─────────────────────────────────────────────────────────
     #createServer() {
-        return http.createServer(async (nodeReq, nodeRes) => {
+        const server = http.createServer(async (nodeReq, nodeRes) => {
             try {
-                const host = nodeReq.headers.host ?? "localhost";
+                const host = nodeReq.headers.host ?? 'localhost';
                 const url = `http://${host}${nodeReq.url}`;
                 const method = nodeReq.method.toUpperCase();
                 const pathname = new URL(url).pathname;
+                // ── Rate Limit ─────────────────────────────────────────────────────
+                if (this.#rateLimitOptions) {
+                    const ip = this.#extractIp(nodeReq);
+                    const rl = this.#checkRateLimit(ip);
+                    this.#applyRateLimitHeaders(nodeRes, rl);
+                    if (!rl.allowed) {
+                        const res = systemResponses[429]({ url }, this.#rateLimitOptions.message);
+                        await this.#sendResponse(nodeRes, res);
+                        return;
+                    }
+                }
+                // ── Body ───────────────────────────────────────────────────────────
                 const bodyBuffer = await this.#readBody(nodeReq);
-                const hasBody = !["GET", "HEAD"].includes(method) && bodyBuffer.length > 0;
+                const hasBody = !['GET', 'HEAD'].includes(method) && bodyBuffer.length > 0;
                 const init = {
                     method,
                     headers: nodeReq.headers,
                 };
-                if (hasBody) {
+                if (hasBody)
                     init.body = new Uint8Array(bodyBuffer);
-                }
+                // ── Request object ─────────────────────────────────────────────────
+                let upgradeData = undefined;
+                let upgradeRequested = false;
                 const request = new Request(url, init);
                 request.params = {};
+                request.user = null;
+                // req.upgrade() — sinaliza internamente sem quebrar o tipo público
+                request.upgrade = (data) => {
+                    upgradeData = data;
+                    upgradeRequested = true;
+                    const res = new Response(null, {
+                        status: 101,
+                    });
+                    res[UPGRADE_SIGNAL] =
+                        data;
+                    return res;
+                };
+                // ── Auth ───────────────────────────────────────────────────────────
+                if (this.#auth) {
+                    request.user = await this.#auth(request);
+                }
+                // ── Global Middlewares ─────────────────────────────────────────────
+                const globalResult = await this.#runMiddlewareChain(this.#globalMiddleware, request);
+                if (globalResult) {
+                    await this.#sendResponse(nodeRes, globalResult);
+                    return;
+                }
+                // ── Routing ────────────────────────────────────────────────────────
                 let response = null;
                 for (const route of this.#routes) {
                     const match = pathname.match(route.regex);
@@ -87,38 +427,82 @@ class Server {
                         continue;
                     request.params = this.#extractParams(match, route.keys);
                     const { handler } = route;
-                    if (typeof handler === "object") {
+                    if (typeof handler === 'object') {
+                        // Middlewares de rota
+                        const routeMiddleware = handler.middleware ?? [];
+                        const routeResult = await this.#runMiddlewareChain(routeMiddleware, request);
+                        if (routeResult) {
+                            await this.#sendResponse(nodeRes, routeResult);
+                            return;
+                        }
                         const methodHandler = handler[method];
-                        response = methodHandler
-                            ? await methodHandler(request)
-                            : new Response("Method Not Allowed", { status: 405 });
+                        if (typeof methodHandler === 'function') {
+                            response = await methodHandler(request);
+                        }
+                        else {
+                            response = systemResponses[405](request);
+                        }
                         break;
                     }
                     response = await handler(request);
                     break;
                 }
+                // ── WebSocket Upgrade ──────────────────────────────────────────────
+                if (upgradeRequested) {
+                    // Resposta 101 é tratada pelo evento 'upgrade' do servidor
+                    // Armazenamos o upgradeData pra usar quando o evento disparar
+                    ;
+                    nodeReq.__upgradeData = upgradeData;
+                    return;
+                }
+                // ── Fallback ───────────────────────────────────────────────────────
                 if (!response && this.#fallback)
                     response = await this.#fallback(request);
-                if (!response)
-                    response = new Response("Not Found", { status: 404 });
+                response ??= systemResponses[404](request);
                 await this.#sendResponse(nodeRes, response);
             }
             catch (err) {
-                if (this.#errorHandler) {
-                    try {
-                        await this.#sendResponse(nodeRes, await this.#errorHandler(err));
-                    }
-                    catch {
-                        nodeRes.writeHead(500);
-                        nodeRes.end("Internal Server Error");
-                    }
+                try {
+                    const errResponse = (await this.#errorHandler?.(err)) ??
+                        systemResponses[500]({
+                            url: `http://${nodeReq.headers.host ?? 'localhost'}${nodeReq.url}`,
+                        });
+                    await this.#sendResponse(nodeRes, errResponse);
                 }
-                else {
+                catch {
                     nodeRes.writeHead(500);
-                    nodeRes.end("Internal Server Error");
+                    nodeRes.end('Internal Server Error');
                 }
             }
         });
+        // ── WebSocket upgrade event ──────────────────────────────────────────────
+        if (this.#wsHandlers) {
+            server.on('upgrade', (nodeReq, socket, head) => {
+                // Verifica origin se allowedOrigins está configurado
+                const allowedOrigins = this.#wsHandlers.allowedOrigins;
+                if (allowedOrigins && allowedOrigins.length > 0) {
+                    const origin = nodeReq.headers['origin'] ?? '';
+                    if (!allowedOrigins.includes(origin)) {
+                        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+                        socket.destroy();
+                        return;
+                    }
+                }
+                // Rate limit também se aplica ao WS
+                if (this.#rateLimitOptions) {
+                    const ip = this.#extractIp(nodeReq);
+                    const rl = this.#checkRateLimit(ip);
+                    if (!rl.allowed) {
+                        socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+                        socket.destroy();
+                        return;
+                    }
+                }
+                const upgradeData = nodeReq.__upgradeData;
+                this.#handleWebSocketUpgrade(nodeReq, socket, head, upgradeData);
+            });
+        }
+        return server;
     }
     get url() {
         return new URL(`http://localhost:${this.#port}`);
@@ -131,6 +515,31 @@ class Server {
         return new Promise((resolve, reject) => this.#server.close((err) => (err ? reject(err) : resolve())));
     }
 }
+// ─── WebSocket frame encoder ──────────────────────────────────────────────────
+function encodeWSFrame(payload, opcode) {
+    const length = payload.length;
+    let header;
+    if (length < 126) {
+        header = Buffer.alloc(2);
+        header[0] = 0x80 | opcode; // FIN + opcode
+        header[1] = length;
+    }
+    else if (length < 65536) {
+        header = Buffer.alloc(4);
+        header[0] = 0x80 | opcode;
+        header[1] = 126;
+        header.writeUInt16BE(length, 2);
+    }
+    else {
+        header = Buffer.alloc(10);
+        header[0] = 0x80 | opcode;
+        header[1] = 127;
+        header.writeUInt32BE(0, 2);
+        header.writeUInt32BE(length, 6);
+    }
+    return Buffer.concat([header, payload]);
+}
+// ─── Export ───────────────────────────────────────────────────────────────────
 /**
  * Cria e inicia um servidor HTTP com roteamento estilo Bun.
  * Compatível com Node.js >= 18 (usa Web APIs: Request, Response, URL).
@@ -138,19 +547,39 @@ class Server {
  * @example
  * import { serve } from 'data-handlers/serve'
  *
+ * const myAuth = async (req) => {
+ *   const token = req.headers.get('authorization')?.replace('Bearer ', '')
+ *   return token ? verifyToken(token) : null
+ * }
+ *
  * serve({
  *   port: 3000,
+ *   auth: myAuth,
+ *   middleware: [logger],
+ *   rateLimit: { windowMs: 60_000, max: 100 },
  *   routes: {
  *     '/users': {
- *       GET:  (req) => Response.json(users),
+ *       GET: (req) => Response.json(users),
  *       POST: async (req) => {
  *         const body = await req.json()
  *         return Response.json(body, { status: 201 })
  *       }
  *     },
- *     '/users/:id': {
- *       GET: (req) => Response.json({ id: req.params.id })
+ *     '/admin': {
+ *       middleware: [requireAuth],
+ *       GET: (req) => Response.json({ user: req.user })
+ *     },
+ *     '/chat': {
+ *       GET: (req) => req.upgrade({ user: req.user })
  *     }
+ *   },
+ *   websocket: {
+ *     allowedOrigins: ['https://meusite.com'],
+ *     maxPayload: 64 * 1024,
+ *     heartbeat: 30_000,
+ *     open:    (ws) => console.log('conectou:', ws.data),
+ *     message: (ws, data) => ws.send(`eco: ${data}`),
+ *     close:   (ws, code) => console.log('desconectou:', code),
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
  * })

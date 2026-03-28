@@ -1,6 +1,16 @@
 const DEFAULT_LOWERCASE = new Set([
-    'de', 'da', 'do', 'das', 'dos', 'e',
-    'of', 'the', 'and', 'at', 'in', 'on',
+    'de',
+    'da',
+    'do',
+    'das',
+    'dos',
+    'e',
+    'of',
+    'the',
+    'and',
+    'at',
+    'in',
+    'on',
 ]);
 /**
  * Normaliza um nome para Title Case.
@@ -17,7 +27,7 @@ export const nameHandler = (value, options = {}) => {
         throw new TypeError(`[normalize:name] Expected non-empty string. Received: ${typeof value === 'string' ? `"${value}"` : typeof value}`);
     }
     const lowerSet = options.lowerCaseWords !== undefined
-        ? new Set(options.lowerCaseWords.map((w) => w.toLowerCase()))
+        ? new Set(options.lowerCaseWords.map(w => w.toLowerCase()))
         : DEFAULT_LOWERCASE;
     return value
         .trim()

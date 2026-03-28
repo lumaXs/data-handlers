@@ -17,7 +17,12 @@ function buildAccessor(type) {
             return { valid: false, value: null, error: err.message };
         }
     };
-    return Object.freeze({ normalize, validate, parse: normalize, safe: validate });
+    return Object.freeze({
+        normalize,
+        validate,
+        parse: normalize,
+        safe: validate,
+    });
 }
 function getAccessor(type) {
     if (!accessorCache.has(type)) {
@@ -27,8 +32,12 @@ function getAccessor(type) {
 }
 // ─── Meta ─────────────────────────────────────────────────────────────────────
 const meta = Object.freeze({
-    get types() { return [...registry.keys()]; },
-    has(type) { return registry.has(formatType(type)); },
+    get types() {
+        return [...registry.keys()];
+    },
+    has(type) {
+        return registry.has(formatType(type));
+    },
 });
 // ─── Proxy ────────────────────────────────────────────────────────────────────
 /**

@@ -3,7 +3,10 @@ const isValidCPF = (cpf) => {
     const d = cpf.replace(/\D/g, '');
     if (d.length !== 11 || /^(\d)\1+$/.test(d))
         return false;
-    const calc = (f) => d.slice(0, f - 1).split('').reduce((s, v, i) => s + Number(v) * (f - i), 0);
+    const calc = (f) => d
+        .slice(0, f - 1)
+        .split('')
+        .reduce((s, v, i) => s + Number(v) * (f - i), 0);
     const mod = (n) => ((n * 10) % 11) % 10;
     return mod(calc(10)) === Number(d[9]) && mod(calc(11)) === Number(d[10]);
 };

@@ -283,8 +283,16 @@ h2:hover .anchor{opacity:1}
   <a href="#pattern-form">Formulário</a>
   <a href="#pattern-display">Exibição</a>
   <a href="#pattern-patch">PATCH parcial</a>
-  <div class="sec">Bônus</div>
-  <a href="#serve">data-handlers/serve</a>
+  <div class="sec">serve</div>
+  <a href="#serve">Visão geral</a>
+  <a href="#serve-options">ServeOptions</a>
+  <a href="#serve-routes">Rotas</a>
+  <a href="#serve-system">systemResponses</a>
+  <a href="#serve-middleware">Middleware</a>
+  <a href="#serve-ratelimit">Rate limit</a>
+  <a href="#serve-auth">Auth</a>
+  <a href="#serve-websocket">WebSocket</a>
+  <a href="#serve-typescript">TypeScript</a>
   <div class="sec">Referência</div>
   <a href="#cheatsheet">Cheatsheet</a>
 </nav>
@@ -1178,116 +1186,503 @@ app.patch(<span class="str">'/usuarios/:id'</span>, (req, res) => {
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <hr>
-<h2 id="serve">Bônus: data-handlers/serve <a class="anchor" href="#serve">#</a></h2>
+<h2 id="serve">data-handlers/serve <a class="anchor" href="#serve">#</a></h2>
 
-<p>A lib inclui um wrapper HTTP para Node.js puro — sem Express, sem Fastify. A API é intencionalmente parecida com o <code>Bun.serve()</code>, então quem usa Bun vai se sentir em casa, e quem usa Node.js puro não precisa aprender um framework novo só pra ter roteamento básico.</p>
+<p>Um wrapper HTTP completo para Node.js puro — sem Express, sem Fastify, zero dependências. A API espelha o <code>Bun.serve()</code> intencionalmente: roteamento, middleware, auth, rate limit e WebSocket numa única chamada de função.</p>
 
-<div class="note"><strong>Node.js >= 18 apenas.</strong> Usa Web APIs nativas (<code>Request</code>, <code>Response</code>, <code>URL</code>). Não é necessário com Bun, Express, Fastify ou similares — esses já têm roteamento próprio.</div>
+<div class="note"><strong>Node.js &ge; 18 apenas.</strong> Usa Web APIs nativas (<code>Request</code>, <code>Response</code>, <code>URL</code>). Se você já usa Bun, Express, Fastify ou similar — não precisa disso.</div>
 
 <div class="card">
-<div class="ch"><span class="label">Servidor básico</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<div class="ch"><span class="label">Imports disponíveis</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> {
+  serve,           <span class="cm">// função principal</span>
+  systemResponses, <span class="cm">// respostas padronizadas por código HTTP</span>
+  requireAuth,     <span class="cm">// middleware pronto: bloqueia sem auth</span>
+  safeCompare,     <span class="cm">// comparação segura contra timing attacks</span>
+} <span class="kw">from</span> <span class="str">'data-handlers/serve'</span></pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-options">ServeOptions <a class="anchor" href="#serve-options">#</a></h2>
+
+<p>Todas as opções passadas para <code>serve()</code>. Nenhuma é obrigatória.</p>
+
+<div class="table-wrap">
+<table>
+  <tr><th>Opção</th><th>Tipo</th><th>Default</th><th>Descrição</th></tr>
+  <tr><td>port</td><td><code>number</code></td><td><code>3000</code></td><td>Porta do servidor</td></tr>
+  <tr><td>routes</td><td><code>Routes</code></td><td><code>{}</code></td><td>Mapa de rotas e handlers</td></tr>
+  <tr><td>middleware</td><td><code>Middleware[]</code></td><td><code>[]</code></td><td>Middlewares globais — rodam em toda request, em ordem</td></tr>
+  <tr><td>fetch</td><td><code>RouteHandler</code></td><td>—</td><td>Fallback quando nenhuma rota casa. Se omitido, usa <code>systemResponses[404]</code></td></tr>
+  <tr><td>error</td><td><code>(err) =&gt; Response</code></td><td>—</td><td>Handler de erros não tratados. Se omitido, usa <code>systemResponses[500]</code></td></tr>
+  <tr><td>auth</td><td><code>AuthFunction&lt;TUser&gt;</code></td><td>—</td><td>Função de autenticação — resultado injetado em <code>req.user</code></td></tr>
+  <tr><td>rateLimit</td><td><code>RateLimitOptions</code></td><td>—</td><td>Configuração de rate limit por IP</td></tr>
+  <tr><td>websocket</td><td><code>WSHandlers</code></td><td>—</td><td>Handlers de WebSocket na mesma porta</td></tr>
+</table>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Servidor mínimo</span><button class="cb" onclick="cp(this)">Copiar</button></div>
 <pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
-<span class="kw">import</span> { schema } <span class="kw">from</span> <span class="str">'data-handlers'</span>
-
-<span class="kw">const</span> userSchema = schema({
-  name:     <span class="str">'name'</span>,
-  email:    <span class="str">'email'</span>,
-  phone:    <span class="str">'phone'</span>,
-  document: <span class="str">'cpf'</span>,
-  password: <span class="str">'password'</span>,
-})
-
-<span class="kw">const</span> users = []
 
 serve({
   port: <span class="num">3000</span>,
-
   routes: {
-    <span class="str">'/'</span>: () => <span class="cls">Response</span>.json({ message: <span class="str">'Welcome to the backend.'</span> }),
-
-    <span class="str">'/users'</span>: {
-      GET: () => <span class="cls">Response</span>.json(users),
-
-      POST: <span class="kw">async</span> (req) => {
-        <span class="kw">const</span> result = userSchema.safeParse(<span class="kw">await</span> req.json())
-        <span class="kw">if</span> (!result.success)
-          <span class="kw">return</span> <span class="cls">Response</span>.json(result.errors, { status: <span class="num">400</span> })
-
-        users.push(result.data)
-        <span class="kw">return</span> <span class="cls">Response</span>.json(result.data, { status: <span class="num">201</span> })
-      }
-    },
-
-    <span class="str">'/users/:id'</span>: {
-      GET: (req) => {
-        <span class="kw">const</span> user = users.find(u => u.id === req.params.id)
-        <span class="kw">if</span> (!user) <span class="kw">return new</span> <span class="cls">Response</span>(<span class="str">'Not Found'</span>, { status: <span class="num">404</span> })
-        <span class="kw">return</span> <span class="cls">Response</span>.json(user)
-      },
-
-      DELETE: (req) => {
-        <span class="kw">const</span> i = users.findIndex(u => u.id === req.params.id)
-        <span class="kw">if</span> (i === <span class="num">-1</span>) <span class="kw">return new</span> <span class="cls">Response</span>(<span class="str">'Not Found'</span>, { status: <span class="num">404</span> })
-        users.splice(i, <span class="num">1</span>)
-        <span class="kw">return new</span> <span class="cls">Response</span>(<span class="kw">null</span>, { status: <span class="num">204</span> })
-      }
-    }
-  },
-
-  error: (err) => <span class="cls">Response</span>.json({ error: err.message }, { status: <span class="num">500</span> })
+    <span class="str">'/'</span>: () => <span class="cls">Response</span>.json({ ok: <span class="kw">true</span> }),
+  }
 })</pre>
 </div>
 
-<p>Cada rota aceita um handler direto (qualquer método) ou um objeto com os métodos separados. Params de URL ficam em <code>req.params</code>:</p>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-routes">Rotas <a class="anchor" href="#serve-routes">#</a></h2>
+
+<p>Cada chave do objeto <code>routes</code> é um path. O valor pode ser um handler direto (aceita qualquer método) ou um objeto com os métodos HTTP separados. Rotas estáticas têm prioridade sobre dinâmicas automaticamente.</p>
 
 <div class="card">
-<div class="ch"><span class="label">Rotas com params e wildcard</span><button class="cb" onclick="cp(this)">Copiar</button></div>
-<pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
-
-serve({
-  port: <span class="num">3000</span>,
+<div class="ch"><span class="label">Formatos de rota</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>serve({
   routes: {
-    <span class="cm">// Handler direto — qualquer método</span>
+    <span class="cm">// Handler direto — qualquer método HTTP</span>
     <span class="str">'/'</span>: (req) => <span class="cls">Response</span>.json({ method: req.method }),
 
-    <span class="cm">// Params de URL</span>
-    <span class="str">'/posts/:slug'</span>: {
-      GET: (req) => <span class="cls">Response</span>.json({ slug: req.params.slug }),
+    <span class="cm">// Métodos separados</span>
+    <span class="str">'/users'</span>: {
+      GET:    () => <span class="cls">Response</span>.json(users),
+      POST:   <span class="kw">async</span> (req) => { <span class="kw">const</span> body = <span class="kw">await</span> req.json(); <span class="cm">/* ... */</span> },
+      PUT:    (req) => <span class="cm">/* ... */</span>,
+      PATCH:  (req) => <span class="cm">/* ... */</span>,
+      DELETE: (req) => <span class="cm">/* ... */</span>,
+    },
+
+    <span class="cm">// Param dinâmico — disponível em req.params.id</span>
+    <span class="str">'/users/:id'</span>: {
+      GET: (req) => <span class="cls">Response</span>.json({ id: req.params.id }),
     },
 
     <span class="cm">// Múltiplos params</span>
-    <span class="str">'/users/:id/posts/:postId'</span>: {
+    <span class="str">'/users/:userId/posts/:postId'</span>: {
       GET: (req) => <span class="cls">Response</span>.json(req.params),
-      <span class="cm">// req.params → { id: '123', postId: '456' }</span>
+      <span class="cm">// req.params → { userId: '1', postId: '42' }</span>
     },
 
-    <span class="cm">// Wildcard — captura qualquer rota não mapeada</span>
-    <span class="str">'/*'</span>: () => <span class="cls">Response</span>.json({ error: <span class="str">'Not found'</span> }, { status: <span class="num">404</span> }),
+    <span class="cm">// Wildcard — captura qualquer sub-path</span>
+    <span class="str">'/static/*'</span>: (req) => <span class="cls">Response</span>.json({ path: req.url }),
   }
 })</pre>
 </div>
 
 <div class="card">
-<div class="ch"><span class="label">fetch fallback e error handler</span><button class="cb" onclick="cp(this)">Copiar</button></div>
-<pre>serve({
-  port: <span class="num">3000</span>,
-  routes: { <span class="cm">/* ... */</span> },
+<div class="ch"><span class="label">Lendo o body da request</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="str">'/produtos'</span>: {
+  POST: <span class="kw">async</span> (req) => {
+    <span class="kw">const</span> body = <span class="kw">await</span> req.json()       <span class="cm">// JSON</span>
+    <span class="kw">const</span> text = <span class="kw">await</span> req.text()       <span class="cm">// string pura</span>
+    <span class="kw">const</span> form = <span class="kw">await</span> req.formData()   <span class="cm">// FormData</span>
+    <span class="kw">const</span> buf  = <span class="kw">await</span> req.arrayBuffer() <span class="cm">// binário</span>
 
-  <span class="cm">// fetch: chamado quando nenhuma rota casa</span>
-  fetch: (req) => {
-    <span class="kw">const</span> url = <span class="kw">new</span> <span class="cls">URL</span>(req.url)
-    <span class="kw">return</span> <span class="cls">Response</span>.json({ path: url.pathname, message: <span class="str">'rota não encontrada'</span> }, { status: <span class="num">404</span> })
-  },
+    <span class="kw">return</span> <span class="cls">Response</span>.json({ recebido: body }, { status: <span class="num">201</span> })
+  }
+}</pre>
+</div>
 
-  <span class="cm">// error: captura qualquer erro não tratado nos handlers</span>
-  error: (err) => {
-    console.error(err)
-    <span class="kw">return</span> <span class="cls">Response</span>.json({ error: <span class="str">'Internal Server Error'</span> }, { status: <span class="num">500</span> })
+<div class="tip"><strong>Limite de payload:</strong> o body é limitado a <strong>1 MB</strong> por padrão. Payloads maiores derrubam a conexão com erro — o <code>error</code> handler captura e pode retornar um 400/413 customizado.</div>
+
+<p>Quando uma rota existe mas o método HTTP não está definido nela, o servidor responde automaticamente com <code>405 Method Not Allowed</code> via <code>systemResponses[405]</code>. Quando nenhuma rota casa, cai no <code>fetch</code> ou no <code>systemResponses[404]</code>.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-system">systemResponses <a class="anchor" href="#serve-system">#</a></h2>
+
+<p>Objeto exportado com factories de resposta JSON padronizadas. O servidor usa internamente via <code>??</code> — só entra quando o dev não retornou nada. Mas você pode usar nos seus próprios handlers também.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Shape da resposta</span></div>
+<pre>{
+  statusCode: <span class="num">400</span>,
+  error:      <span class="str">"Bad Request"</span>,
+  message:    <span class="str">"CPF inválido"</span>,       <span class="cm">// customizável</span>
+  path:       <span class="str">"/usuarios"</span>,          <span class="cm">// extraído de req.url automaticamente</span>
+  timestamp:  <span class="str">"2026-03-27T20:00:00.000Z"</span>
+}</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Usando systemResponses nos seus handlers</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  routes: {
+    <span class="str">'/usuarios'</span>: {
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> body = <span class="kw">await</span> req.json()
+
+        <span class="kw">if</span> (!body.cpf)
+          <span class="kw">return</span> systemResponses[<span class="num">400</span>](req, <span class="str">'CPF é obrigatório'</span>)
+
+        <span class="kw">if</span> (!req.user)
+          <span class="kw">return</span> systemResponses[<span class="num">401</span>](req)
+
+        <span class="kw">if</span> (req.user.role !== <span class="str">'admin'</span>)
+          <span class="kw">return</span> systemResponses[<span class="num">403</span>](req, <span class="str">'Requer role admin'</span>)
+
+        <span class="cm">/* ... */</span>
+      }
+    }
   }
 })</pre>
 </div>
 
-<div class="note">O objeto retornado por <code>serve()</code> é um <code>http.Server</code> nativo do Node — dá pra fazer tudo que você faria normalmente, tipo <code>server.close()</code> em testes. Ele também expõe <code>server.url</code> com a URL base do servidor.</div>
+<div class="table-wrap">
+<table>
+  <tr><th>Código</th><th>error</th><th>Usado automaticamente por</th></tr>
+  <tr><td>400</td><td>Bad Request</td><td>— (manual)</td></tr>
+  <tr><td>401</td><td>Unauthorized</td><td><code>requireAuth</code> quando <code>req.user</code> é null</td></tr>
+  <tr><td>403</td><td>Forbidden</td><td>— (manual)</td></tr>
+  <tr><td>404</td><td>Not Found</td><td>Nenhuma rota casou e <code>fetch</code> não definido</td></tr>
+  <tr><td>405</td><td>Method Not Allowed</td><td>Rota existe mas método não está no <code>MethodMap</code></td></tr>
+  <tr><td>429</td><td>Too Many Requests</td><td>Rate limit esgotado</td></tr>
+  <tr><td>500</td><td>Internal Server Error</td><td>Exceção não tratada e <code>error</code> não definido</td></tr>
+</table>
+</div>
+
+<div class="note"><strong>Sem informação vazada.</strong> As respostas automáticas (404, 405, 500) nunca expõem stack trace, lista de rotas ou detalhes internos — apenas o shape padronizado acima.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-middleware">Middleware <a class="anchor" href="#serve-middleware">#</a></h2>
+
+<p>Middlewares são funções que rodam antes do handler. O contrato é simples: retornar <code>null</code> passa para o próximo, retornar uma <code>Response</code> interrompe a chain e responde imediatamente. A execução é sempre serial e determinística — nunca paralela.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Contrato de middleware</span></div>
+<pre><span class="kw">type</span> <span class="cls">Middleware</span>&lt;TUser&gt; = (
+  req: <span class="cls">BunLikeRequest</span>&lt;TUser&gt;
+) => <span class="cls">Response</span> | <span class="kw">null</span> | <span class="cls">Promise</span>&lt;<span class="cls">Response</span> | <span class="kw">null</span>&gt;
+
+<span class="cm">// null  → passa para o próximo</span>
+<span class="cm">// Response → interrompe aqui e responde</span></pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Middleware global + por rota</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve, requireAuth, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Logger global</span>
+<span class="kw">function</span> <span class="fn">logger</span>(req) {
+  console.log(<span class="str">`[<span class="cls">${new Date().toISOString()}</span>] <span class="cls">${req.method}</span> <span class="cls">${new URL(req.url).pathname}</span>`</span>)
+  <span class="kw">return null</span> <span class="cm">// sempre passa</span>
+}
+
+<span class="cm">// Middleware de rota — só admin passa</span>
+<span class="kw">function</span> <span class="fn">onlyAdmin</span>(req) {
+  <span class="kw">if</span> (req.user?.role !== <span class="str">'admin'</span>)
+    <span class="kw">return</span> systemResponses[<span class="num">403</span>](req, <span class="str">'Requer role admin'</span>)
+  <span class="kw">return null</span>
+}
+
+serve({
+  <span class="cm">// Global — roda em toda request, na ordem definida</span>
+  middleware: [logger],
+
+  routes: {
+    <span class="str">'/publica'</span>: {
+      GET: () => <span class="cls">Response</span>.json({ ok: <span class="kw">true</span> }),
+    },
+
+    <span class="str">'/perfil'</span>: {
+      <span class="cm">// Middleware de rota — só aqui</span>
+      middleware: [requireAuth],
+      GET: (req) => <span class="cls">Response</span>.json({ user: req.user }),
+    },
+
+    <span class="str">'/admin'</span>: {
+      <span class="cm">// Cadeia: requireAuth → onlyAdmin → handler</span>
+      middleware: [requireAuth, onlyAdmin],
+      GET: (req) => <span class="cls">Response</span>.json({ painel: <span class="str">'admin'</span> }),
+    },
+  },
+})</pre>
+</div>
+
+<div class="note"><strong>Ordem de execução:</strong> <code>[middlewares globais] → [middlewares de rota] → handler</code>. Se qualquer middleware retornar uma <code>Response</code>, os seguintes são ignorados.</div>
+
+<div class="card">
+<div class="ch"><span class="label">requireAuth — middleware pronto exportado</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { requireAuth } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Equivalente a:</span>
+<span class="kw">function</span> <span class="fn">requireAuth</span>(req) {
+  <span class="kw">if</span> (!req.user) <span class="kw">return</span> systemResponses[<span class="num">401</span>](req)
+  <span class="kw">return null</span>
+}
+
+<span class="cm">// Uso direto como middleware de rota:</span>
+<span class="str">'/protegido'</span>: { middleware: [requireAuth], GET: handler }</pre>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-ratelimit">Rate limit <a class="anchor" href="#serve-ratelimit">#</a></h2>
+
+<p>Rate limit por IP usando algoritmo de <strong>sliding window</strong> — imune a burst attacks na borda da janela. Estado armazenado em memória (reset ao reiniciar o processo). Em ambientes com múltiplas instâncias, use um store externo como Redis para compartilhar o estado.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Configuração</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre>serve({
+  rateLimit: {
+    windowMs:   <span class="num">60_000</span>,  <span class="cm">// janela de 1 minuto</span>
+    max:        <span class="num">100</span>,     <span class="cm">// máximo de requests por janela por IP</span>
+    message:    <span class="str">'Limite atingido. Tente novamente em breve.'</span>, <span class="cm">// opcional</span>
+    trustProxy: <span class="kw">false</span>,  <span class="cm">// default — usa socket.remoteAddress</span>
+  },
+})</pre>
+</div>
+
+<p>O servidor adiciona automaticamente os headers de rate limit em <strong>todas</strong> as respostas, não só no 429:</p>
+
+<div class="card">
+<div class="ch"><span class="label">Headers de resposta</span></div>
+<pre>X-RateLimit-Limit:     100    <span class="cm">// max configurado</span>
+X-RateLimit-Remaining: 73     <span class="cm">// requests restantes na janela atual</span>
+X-RateLimit-Reset:     1774…  <span class="cm">// epoch Unix do próximo reset</span>
+Retry-After:           42     <span class="cm">// só no 429 — segundos até poder tentar de novo</span></pre>
+</div>
+
+<div class="warn"><strong>trustProxy: true</strong> usa o header <code>X-Forwarded-For</code> para extrair o IP real. Esse header é manipulável pelo cliente — só ative se você confia no proxy/load balancer na frente do servidor.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-auth">Auth embutido <a class="anchor" href="#serve-auth">#</a></h2>
+
+<p>O wrapper não impõe um mecanismo de autenticação — você define a lógica, ele cuida da integração. A função <code>auth</code> é chamada antes de qualquer middleware em toda request. O resultado é injetado em <code>req.user</code> e fica disponível em todos os middlewares e handlers.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Definindo a função auth</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  <span class="cm">// auth recebe a request e retorna o user — ou null</span>
+  auth: <span class="kw">async</span> (req) => {
+    <span class="kw">const</span> token = req.headers.get(<span class="str">'authorization'</span>)?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+    <span class="kw">if</span> (!token) <span class="kw">return null</span>
+
+    <span class="kw">try</span> {
+      <span class="kw">return await</span> <span class="fn">verifyToken</span>(token)  <span class="cm">// qualquer lógica sua</span>
+    } <span class="kw">catch</span> {
+      <span class="kw">return null</span>
+    }
+  },
+
+  routes: {
+    <span class="str">'/me'</span>: {
+      GET: (req) => <span class="cls">Response</span>.json({ user: req.user }),
+      <span class="cm">// req.user: TUser | null — nunca undefined</span>
+    },
+  }
+})</pre>
+</div>
+
+<div class="note"><strong>req.user</strong> está sempre presente — nunca <code>undefined</code>. Quando <code>auth</code> retorna <code>null</code> (não autenticado), <code>req.user</code> é <code>null</code>. Cabe ao middleware ou handler decidir o que fazer com isso.</div>
+
+<div class="card">
+<div class="ch"><span class="label">safeCompare — proteção contra timing attacks</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { safeCompare } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// ❌ Vulnerável — vazamento de timing</span>
+<span class="kw">if</span> (token === secret) { <span class="cm">/* ... */</span> }
+
+<span class="cm">// ✅ Seguro — tempo constante independente de onde difere</span>
+<span class="kw">if</span> (<span class="fn">safeCompare</span>(token, secret)) { <span class="cm">/* ... */</span> }
+
+<span class="cm">// Internamente usa crypto.timingSafeEqual</span>
+<span class="cm">// Strings de tamanhos diferentes → false (sem vazar o tamanho via timing)</span></pre>
+</div>
+
+<div class="warn"><strong>Token no header, nunca na query string.</strong> <code>?token=xxx</code> aparece em logs de servidor, proxy e histórico do navegador. Sempre use o header <code>Authorization: Bearer &lt;token&gt;</code>.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-websocket">WebSocket <a class="anchor" href="#serve-websocket">#</a></h2>
+
+<p>WebSocket na mesma porta do servidor HTTP — sem porta separada. Quando o cliente envia um <code>Upgrade: websocket</code>, o servidor faz o handshake RFC 6455 e entrega para os handlers configurados. O upgrade acontece via <code>req.upgrade(data?)</code> numa rota GET normal.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Configuração completa</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve, requireAuth } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  routes: {
+    <span class="cm">// O upgrade deve ser feito numa rota GET</span>
+    <span class="str">'/chat'</span>: {
+      middleware: [requireAuth],  <span class="cm">// auth antes do upgrade</span>
+      GET: (req) => req.upgrade({ user: req.user }),
+      <span class="cm">// o objeto passado fica disponível como ws.data em todos os eventos</span>
+    },
+  },
+
+  websocket: {
+    allowedOrigins: [<span class="str">'https://meusite.com'</span>], <span class="cm">// rejeita outras origens com 403</span>
+    maxPayload:     <span class="num">64</span> * <span class="num">1024</span>,               <span class="cm">// 64 KB — fecha com 1009 se exceder</span>
+    heartbeat:      <span class="num">30_000</span>,                  <span class="cm">// ping/pong a cada 30s — mata zumbis</span>
+
+    open(ws) {
+      console.log(<span class="str">'conectou:'</span>, ws.data.user)
+      ws.send(<span class="cls">JSON</span>.stringify({ evento: <span class="str">'bem-vindo'</span> }))
+    },
+
+    message(ws, data) {
+      <span class="cm">// data: string | Buffer</span>
+      ws.send(<span class="str">`eco: <span class="cls">${data}</span>`</span>)
+    },
+
+    close(ws, code, reason) {
+      console.log(<span class="str">`desconectou — code: <span class="cls">${code}</span>, reason: "<span class="cls">${reason}</span>"`</span>)
+    },
+
+    error(ws, err) {
+      console.error(<span class="str">'erro WS:'</span>, err.message)
+    },
+  },
+})</pre>
+</div>
+
+<div class="table-wrap">
+<table>
+  <tr><th>Opção</th><th>Tipo</th><th>Default</th><th>Descrição</th></tr>
+  <tr><td>open</td><td><code>(ws) =&gt; void</code></td><td>—</td><td>Conexão aberta</td></tr>
+  <tr><td>message</td><td><code>(ws, data) =&gt; void</code></td><td>—</td><td>Mensagem recebida (string ou Buffer)</td></tr>
+  <tr><td>close</td><td><code>(ws, code, reason) =&gt; void</code></td><td>—</td><td>Conexão encerrada</td></tr>
+  <tr><td>error</td><td><code>(ws, err) =&gt; void</code></td><td>—</td><td>Erro no socket</td></tr>
+  <tr><td>allowedOrigins</td><td><code>string[]</code></td><td>qualquer</td><td>Lista de origens permitidas — protege contra conexões cross-origin</td></tr>
+  <tr><td>maxPayload</td><td><code>number</code></td><td><code>65536</code></td><td>Tamanho máximo de frame em bytes</td></tr>
+  <tr><td>heartbeat</td><td><code>number</code></td><td><code>30000</code></td><td>Intervalo de ping em ms. <code>0</code> desativa</td></tr>
+</table>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Interface do objeto ws</span></div>
+<pre><span class="kw">type</span> <span class="cls">WSContext</span>&lt;TData&gt; = {
+  send:      (data: <span class="kw">string</span> | <span class="cls">Buffer</span>) => <span class="kw">void</span>
+  close:     (code?: <span class="kw">number</span>, reason?: <span class="kw">string</span>) => <span class="kw">void</span>
+  data:      TData       <span class="cm">// o que foi passado no req.upgrade(data)</span>
+  readyState: <span class="kw">number</span>   <span class="cm">// 1=OPEN 2=CLOSING 3=CLOSED</span>
+}
+
+<span class="cm">// Exemplo: fechar com código de erro</span>
+ws.close(<span class="num">1008</span>, <span class="str">'Policy violation'</span>)
+
+<span class="cm">// Códigos comuns:</span>
+<span class="cm">// 1000 — encerramento normal</span>
+<span class="cm">// 1006 — conexão perdida abruptamente</span>
+<span class="cm">// 1008 — violação de política</span>
+<span class="cm">// 1009 — mensagem muito grande (automático)</span></pre>
+</div>
+
+<div class="warn"><strong>Auth antes do upgrade.</strong> Após o handshake WebSocket, não há mais headers HTTP — é impossível autenticar. Sempre verifique <code>req.user</code> <em>antes</em> de chamar <code>req.upgrade()</code>, de preferência via middleware de rota.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="serve-typescript">TypeScript <a class="anchor" href="#serve-typescript">#</a></h2>
+
+<p><code>serve</code> é genérico em <code>TUser</code> — o tipo do usuário autenticado. Ao tipá-lo, <code>req.user</code> e <code>ws.data</code> ficam completamente tipados em toda a aplicação, sem nenhum cast manual.</p>
+
+<div class="card">
+<div class="ch"><span class="label">Tipando o usuário autenticado</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve, requireAuth, <span class="kw">type</span> <span class="cls">BunLikeRequest</span>, <span class="kw">type</span> <span class="cls">Middleware</span> } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Define o shape do seu user</span>
+<span class="kw">type</span> <span class="cls">User</span> = { id: <span class="kw">string</span>; role: <span class="str">'admin'</span> | <span class="str">'user'</span> }
+
+<span class="cm">// Middleware tipado — req.user é User | null aqui</span>
+<span class="kw">const</span> <span class="fn">onlyAdmin</span>: <span class="cls">Middleware</span>&lt;<span class="cls">User</span>&gt; = (req) => {
+  <span class="kw">if</span> (req.user?.role !== <span class="str">'admin'</span>)
+    <span class="kw">return</span> systemResponses[<span class="num">403</span>](req)
+  <span class="kw">return null</span>
+}
+
+<span class="cm">// serve&lt;User&gt; — TUser propagado para req.user em todo o servidor</span>
+serve&lt;<span class="cls">User</span>&gt;({
+  auth: <span class="kw">async</span> (req): <span class="cls">Promise</span>&lt;<span class="cls">User</span> | <span class="kw">null</span>&gt; => {
+    <span class="kw">const</span> token = req.headers.get(<span class="str">'authorization'</span>)?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+    <span class="kw">return</span> token ? <span class="kw">await</span> <span class="fn">verifyJWT</span>&lt;<span class="cls">User</span>&gt;(token) : <span class="kw">null</span>
+  },
+
+  routes: {
+    <span class="str">'/admin'</span>: {
+      middleware: [requireAuth, onlyAdmin],
+      GET: (req) => {
+        <span class="cm">// req.user é User aqui — TypeScript sabe</span>
+        <span class="kw">return</span> <span class="cls">Response</span>.json({ id: req.user!.id })
+      },
+    },
+
+    <span class="str">'/ws'</span>: {
+      GET: (req) => req.upgrade({ user: req.user }),
+    },
+  },
+
+  websocket: {
+    open(ws) {
+      <span class="cm">// ws.data.user é User | null — propagado do upgrade</span>
+      <span class="kw">const</span> user = (ws.data <span class="kw">as</span> { user: <span class="cls">User</span> | <span class="kw">null</span> }).user
+      console.log(<span class="str">'conectou:'</span>, user?.id)
+    }
+  }
+})</pre>
+</div>
+
+<div class="card">
+<div class="ch"><span class="label">Exemplo integrado — tudo junto</span><button class="cb" onclick="cp(this)">Copiar</button></div>
+<pre><span class="kw">import</span> { serve, requireAuth, safeCompare, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+<span class="kw">import</span> { schema } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">type</span> <span class="cls">User</span> = { id: <span class="kw">string</span>; role: <span class="str">'admin'</span> | <span class="str">'user'</span> }
+
+<span class="kw">const</span> userSchema = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, cpf: <span class="str">'cpf'</span> })
+
+serve&lt;<span class="cls">User</span>&gt;({
+  port: <span class="num">3000</span>,
+
+  auth: <span class="kw">async</span> (req) => {
+    <span class="kw">const</span> token = req.headers.get(<span class="str">'authorization'</span>)?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+    <span class="kw">return</span> token ? <span class="kw">await</span> <span class="fn">verifyJWT</span>(token) : <span class="kw">null</span>
+  },
+
+  middleware: [
+    (req) => { console.log(req.method, <span class="kw">new</span> <span class="cls">URL</span>(req.url).pathname); <span class="kw">return null</span> },
+  ],
+
+  rateLimit: { windowMs: <span class="num">60_000</span>, max: <span class="num">100</span> },
+
+  routes: {
+    <span class="str">'/'</span>: () => <span class="cls">Response</span>.json({ ok: <span class="kw">true</span> }),
+
+    <span class="str">'/usuarios'</span>: {
+      GET:  () => <span class="cls">Response</span>.json(users),
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> r = userSchema.safeParse(<span class="kw">await</span> req.json())
+        <span class="kw">if</span> (!r.success) <span class="kw">return</span> systemResponses[<span class="num">400</span>](req)
+        <span class="kw">return</span> <span class="cls">Response</span>.json(r.data, { status: <span class="num">201</span> })
+      },
+    },
+
+    <span class="str">'/admin'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => <span class="cls">Response</span>.json({ user: req.user }),
+    },
+
+    <span class="str">'/ws'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => req.upgrade({ user: req.user }),
+    },
+  },
+
+  websocket: {
+    allowedOrigins: [<span class="str">'https://meuapp.com'</span>],
+    maxPayload: <span class="num">64</span> * <span class="num">1024</span>,
+    heartbeat:  <span class="num">30_000</span>,
+    open:    (ws) => ws.send(<span class="str">'bem-vindo'</span>),
+    message: (ws, data) => ws.send(<span class="str">`eco: <span class="cls">${data}</span>`</span>),
+    close:   (ws, code) => console.log(<span class="str">'fechou:'</span>, code),
+  },
+
+  error: (err) => systemResponses[<span class="num">500</span>]({ url: <span class="str">'http://localhost:3000'</span> }),
+})</pre>
+</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
 <hr>

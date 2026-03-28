@@ -1,11 +1,21 @@
 export interface NameHandlerOptions {
-  /** Palavras mantidas em minúsculo. Passe [] para desabilitar. */
-  lowerCaseWords?: string[]
+   /** Palavras mantidas em minúsculo. Passe [] para desabilitar. */
+   lowerCaseWords?: string[]
 }
 
 const DEFAULT_LOWERCASE = new Set([
-  'de', 'da', 'do', 'das', 'dos', 'e',
-  'of', 'the', 'and', 'at', 'in', 'on',
+   'de',
+   'da',
+   'do',
+   'das',
+   'dos',
+   'e',
+   'of',
+   'the',
+   'and',
+   'at',
+   'in',
+   'on',
 ])
 
 /**
@@ -18,28 +28,31 @@ const DEFAULT_LOWERCASE = new Set([
  * nameHandler('  emerson   ribeiro  ')  // 'Emerson Ribeiro'
  * nameHandler('maria das dores')        // 'Maria das Dores'
  */
-export const nameHandler = (value: unknown, options: NameHandlerOptions = {}): string => {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new TypeError(
-      `[normalize:name] Expected non-empty string. Received: ${
-        typeof value === 'string' ? `"${value}"` : typeof value
-      }`,
-    )
-  }
+export const nameHandler = (
+   value: unknown,
+   options: NameHandlerOptions = {},
+): string => {
+   if (typeof value !== 'string' || !value.trim()) {
+      throw new TypeError(
+         `[normalize:name] Expected non-empty string. Received: ${
+            typeof value === 'string' ? `"${value}"` : typeof value
+         }`,
+      )
+   }
 
-  const lowerSet =
-    options.lowerCaseWords !== undefined
-      ? new Set(options.lowerCaseWords.map((w) => w.toLowerCase()))
-      : DEFAULT_LOWERCASE
+   const lowerSet =
+      options.lowerCaseWords !== undefined
+         ? new Set(options.lowerCaseWords.map(w => w.toLowerCase()))
+         : DEFAULT_LOWERCASE
 
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .split(' ')
-    .map((word, index) => {
-      if (index !== 0 && lowerSet.has(word)) return word
-      return word.charAt(0).toLocaleUpperCase('pt-BR') + word.slice(1)
-    })
-    .join(' ')
+   return value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .split(' ')
+      .map((word, index) => {
+         if (index !== 0 && lowerSet.has(word)) return word
+         return word.charAt(0).toLocaleUpperCase('pt-BR') + word.slice(1)
+      })
+      .join(' ')
 }

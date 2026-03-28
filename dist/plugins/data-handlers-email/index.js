@@ -4,7 +4,9 @@ const emailHandler = (value, options = {}) => {
     if (typeof value !== 'string' || !value.trim()) {
         throw new TypeError(`[normalize:email] Expected non-empty string. Received: ${value}`);
     }
-    const normalized = options.caseSensitive ? value.trim() : value.trim().toLowerCase();
+    const normalized = options.caseSensitive
+        ? value.trim()
+        : value.trim().toLowerCase();
     if (!EMAIL_RE.test(normalized)) {
         throw new TypeError(`[normalize:email] Invalid email address. Received: ${value}`);
     }
