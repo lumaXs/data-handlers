@@ -1,5 +1,5 @@
-import http from 'http';
-import crypto from 'crypto';
+import http from "http";
+import crypto from "crypto";
 // ─── Utilitários de segurança ──────────────────────────────────────────────────
 /**
  * Compara duas strings de forma segura contra timing attacks.
@@ -16,58 +16,58 @@ export function safeCompare(a, b) {
     return crypto.timingSafeEqual(bufA, bufB);
 }
 export const systemResponses = {
-    400: (req, message = 'Invalid request body') => Response.json({
+    400: (req, message = "Invalid request body") => Response.json({
         statusCode: 400,
-        error: 'Bad Request',
+        error: "Bad Request",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 400 }),
-    401: (req, message = 'Access not allowed') => Response.json({
+    401: (req, message = "Access not allowed") => Response.json({
         statusCode: 401,
-        error: 'Unauthorized',
+        error: "Unauthorized",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 401 }),
-    403: (req, message = 'Forbidden') => Response.json({
+    403: (req, message = "Forbidden") => Response.json({
         statusCode: 403,
-        error: 'Forbidden',
+        error: "Forbidden",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 403 }),
-    404: (req, message = 'Not Found') => Response.json({
+    404: (req, message = "Not Found") => Response.json({
         statusCode: 404,
-        error: 'Not Found',
+        error: "Not Found",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 404 }),
-    405: (req, message = 'Method Not Allowed') => Response.json({
+    405: (req, message = "Method Not Allowed") => Response.json({
         statusCode: 405,
-        error: 'Method Not Allowed',
+        error: "Method Not Allowed",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 405 }),
-    429: (req, message = 'Too Many Requests') => Response.json({
+    429: (req, message = "Too Many Requests") => Response.json({
         statusCode: 429,
-        error: 'Too Many Requests',
+        error: "Too Many Requests",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 429 }),
-    500: (req, message = 'Internal Server Error') => Response.json({
+    500: (req, message = "Internal Server Error") => Response.json({
         statusCode: 500,
-        error: 'Internal Server Error',
+        error: "Internal Server Error",
         message,
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 500 }),
 };
 // Símbolo interno pra sinalizar que é um upgrade request — nunca exposto
-const UPGRADE_SIGNAL = Symbol('ws.upgrade');
+const UPGRADE_SIGNAL = Symbol("ws.upgrade");
 // ─── Middleware helpers ────────────────────────────────────────────────────────
 /**
  * Middleware pronto pra usar: bloqueia requests sem req.user com 401.
@@ -102,7 +102,7 @@ class Server {
             ? {
                 windowMs: rateLimit.windowMs ?? 60_000,
                 max: rateLimit.max ?? 100,
-                message: rateLimit.message ?? 'Too Many Requests',
+                message: rateLimit.message ?? "Too Many Requests",
                 trustProxy: rateLimit.trustProxy ?? false,
             }
             : undefined;
@@ -114,10 +114,10 @@ class Server {
     #parseRoute(path) {
         const keys = [];
         const pattern = path
-            .replace(/\/\*/g, '(?:/.*)?')
+            .replace(/\/\*/g, "(?:/.*)?")
             .replace(/:([a-zA-Z_]+)/g, (_, key) => {
             keys.push(key);
-            return '([^/]+)';
+            return "([^/]+)";
         });
         return { regex: new RegExp(`^${pattern}$`), keys };
     }
@@ -125,7 +125,7 @@ class Server {
         return Object.entries(routes)
             .map(([path, handler]) => ({
             path,
-            dynamic: path.includes(':') || path.includes('*'),
+            dynamic: path.includes(":") || path.includes("*"),
             ...this.#parseRoute(path),
             handler,
         }))
@@ -140,17 +140,17 @@ class Server {
     // ── Rate Limit (Sliding Window) ─────────────────────────────────────────────
     #extractIp(nodeReq) {
         if (this.#rateLimitOptions?.trustProxy) {
-            const forwarded = nodeReq.headers['x-forwarded-for'];
+            const forwarded = nodeReq.headers["x-forwarded-for"];
             if (forwarded) {
                 // Pega o primeiro IP da lista (mais próximo do cliente)
                 const ip = Array.isArray(forwarded)
                     ? forwarded[0]
-                    : forwarded.split(',')[0];
+                    : forwarded.split(",")[0];
                 if (ip)
                     return ip.trim();
             }
         }
-        return nodeReq.socket.remoteAddress ?? 'unknown';
+        return nodeReq.socket.remoteAddress ?? "unknown";
     }
     #checkRateLimit(ip) {
         const opts = this.#rateLimitOptions;
@@ -158,7 +158,7 @@ class Server {
         const windowStart = now - opts.windowMs;
         const entry = this.#rateLimitStore.get(ip) ?? { timestamps: [] };
         // Remove timestamps fora da janela deslizante
-        entry.timestamps = entry.timestamps.filter(t => t > windowStart);
+        entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
         const remaining = Math.max(0, opts.max - entry.timestamps.length);
         // Reset = quando o timestamp mais antigo sair da janela
         const oldestTimestamp = entry.timestamps[0];
@@ -180,11 +180,11 @@ class Server {
         return { allowed: true, limit: opts.max, remaining: remaining - 1, reset };
     }
     #applyRateLimitHeaders(nodeRes, info) {
-        nodeRes.setHeader('X-RateLimit-Limit', info.limit);
-        nodeRes.setHeader('X-RateLimit-Remaining', info.remaining);
-        nodeRes.setHeader('X-RateLimit-Reset', info.reset);
+        nodeRes.setHeader("X-RateLimit-Limit", info.limit);
+        nodeRes.setHeader("X-RateLimit-Remaining", info.remaining);
+        nodeRes.setHeader("X-RateLimit-Reset", info.reset);
         if (info.retryAfter !== undefined) {
-            nodeRes.setHeader('Retry-After', info.retryAfter);
+            nodeRes.setHeader("Retry-After", info.retryAfter);
         }
     }
     // ── Middleware Chain ────────────────────────────────────────────────────────
@@ -202,16 +202,16 @@ class Server {
         return new Promise((resolve, reject) => {
             const chunks = [];
             let size = 0;
-            nodeReq.on('data', (chunk) => {
+            nodeReq.on("data", (chunk) => {
                 size += chunk.length;
                 if (size > limit) {
-                    reject(new Error('Payload too large'));
+                    reject(new Error("Payload too large"));
                     nodeReq.destroy();
                     return;
                 }
                 chunks.push(chunk);
             });
-            nodeReq.on('end', () => resolve(Buffer.concat(chunks)));
+            nodeReq.on("end", () => resolve(Buffer.concat(chunks)));
         });
     }
     async #sendResponse(nodeRes, response) {
@@ -229,20 +229,20 @@ class Server {
         const maxPayload = handlers.maxPayload ?? 64 * 1024;
         const heartbeatInterval = handlers.heartbeat ?? 30_000;
         // ── Handshake ────────────────────────────────────────────────────────────
-        const key = nodeReq.headers['sec-websocket-key'];
+        const key = nodeReq.headers["sec-websocket-key"];
         if (!key) {
             socket.destroy();
             return;
         }
         const acceptKey = crypto
-            .createHash('sha1')
-            .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
-            .digest('base64');
-        socket.write('HTTP/1.1 101 Switching Protocols\r\n' +
-            'Upgrade: websocket\r\n' +
-            'Connection: Upgrade\r\n' +
+            .createHash("sha1")
+            .update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+            .digest("base64");
+        socket.write("HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
             `Sec-WebSocket-Accept: ${acceptKey}\r\n` +
-            '\r\n');
+            "\r\n");
         // ── Contexto da conexão ──────────────────────────────────────────────────
         const ws = {
             data: upgradeData,
@@ -251,10 +251,10 @@ class Server {
                 if (ws.readyState !== 1)
                     return;
                 const payload = Buffer.isBuffer(data) ? data : Buffer.from(data);
-                const frame = encodeWSFrame(payload, typeof data === 'string' ? 0x1 : 0x2);
+                const frame = encodeWSFrame(payload, typeof data === "string" ? 0x1 : 0x2);
                 socket.write(frame);
             },
-            close(code = 1000, reason = '') {
+            close(code = 1000, reason = "") {
                 if (ws.readyState !== 1)
                     return;
                 ws.readyState = 2; // CLOSING
@@ -283,7 +283,7 @@ class Server {
         }
         // ── Parser de frames ─────────────────────────────────────────────────────
         let buffer = Buffer.alloc(0);
-        socket.on('data', (chunk) => {
+        socket.on("data", (chunk) => {
             buffer = Buffer.concat([buffer, chunk]);
             while (buffer.length >= 2) {
                 const firstByte = buffer[0];
@@ -307,16 +307,14 @@ class Server {
                 }
                 if (payloadLength > maxPayload) {
                     handlers.error?.(ws, new Error(`Payload excede o limite de ${maxPayload} bytes`));
-                    ws.close(1009, 'Message too big');
+                    ws.close(1009, "Message too big");
                     return;
                 }
                 const maskLength = masked ? 4 : 0;
                 const totalLength = headerLength + maskLength + payloadLength;
                 if (buffer.length < totalLength)
                     return;
-                const maskKey = masked
-                    ? buffer.slice(headerLength, headerLength + 4)
-                    : null;
+                const maskKey = masked ? buffer.slice(headerLength, headerLength + 4) : null;
                 let payload = buffer.slice(headerLength + maskLength, totalLength);
                 if (masked && maskKey) {
                     payload = Buffer.from(payload);
@@ -327,15 +325,14 @@ class Server {
                 buffer = buffer.slice(totalLength);
                 switch (opcode) {
                     case 0x1: // Text
-                        handlers.message?.(ws, payload.toString('utf8'));
+                        handlers.message?.(ws, payload.toString("utf8"));
                         break;
                     case 0x2: // Binary
                         handlers.message?.(ws, payload);
                         break;
-                    case 0x8: {
-                        // Close
+                    case 0x8: { // Close
                         const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1000;
-                        const reason = payload.length > 2 ? payload.slice(2).toString() : '';
+                        const reason = payload.length > 2 ? payload.slice(2).toString() : "";
                         ws.readyState = 3; // CLOSED
                         clearInterval(heartbeatTimer);
                         handlers.close?.(ws, code, reason);
@@ -351,16 +348,16 @@ class Server {
                 }
             }
         });
-        socket.on('error', err => {
+        socket.on("error", (err) => {
             clearInterval(heartbeatTimer);
             ws.readyState = 3;
             handlers.error?.(ws, err);
         });
-        socket.on('close', () => {
+        socket.on("close", () => {
             clearInterval(heartbeatTimer);
             if (ws.readyState !== 3) {
                 ws.readyState = 3;
-                handlers.close?.(ws, 1006, 'Connection lost');
+                handlers.close?.(ws, 1006, "Connection lost");
             }
         });
     }
@@ -368,7 +365,7 @@ class Server {
     #createServer() {
         const server = http.createServer(async (nodeReq, nodeRes) => {
             try {
-                const host = nodeReq.headers.host ?? 'localhost';
+                const host = nodeReq.headers.host ?? "localhost";
                 const url = `http://${host}${nodeReq.url}`;
                 const method = nodeReq.method.toUpperCase();
                 const pathname = new URL(url).pathname;
@@ -385,7 +382,7 @@ class Server {
                 }
                 // ── Body ───────────────────────────────────────────────────────────
                 const bodyBuffer = await this.#readBody(nodeReq);
-                const hasBody = !['GET', 'HEAD'].includes(method) && bodyBuffer.length > 0;
+                const hasBody = !["GET", "HEAD"].includes(method) && bodyBuffer.length > 0;
                 const init = {
                     method,
                     headers: nodeReq.headers,
@@ -402,11 +399,8 @@ class Server {
                 request.upgrade = (data) => {
                     upgradeData = data;
                     upgradeRequested = true;
-                    const res = new Response(null, {
-                        status: 101,
-                    });
-                    res[UPGRADE_SIGNAL] =
-                        data;
+                    const res = new Response(null, { status: 101 });
+                    res[UPGRADE_SIGNAL] = data;
                     return res;
                 };
                 // ── Auth ───────────────────────────────────────────────────────────
@@ -427,7 +421,7 @@ class Server {
                         continue;
                     request.params = this.#extractParams(match, route.keys);
                     const { handler } = route;
-                    if (typeof handler === 'object') {
+                    if (typeof handler === "object") {
                         // Middlewares de rota
                         const routeMiddleware = handler.middleware ?? [];
                         const routeResult = await this.#runMiddlewareChain(routeMiddleware, request);
@@ -436,7 +430,7 @@ class Server {
                             return;
                         }
                         const methodHandler = handler[method];
-                        if (typeof methodHandler === 'function') {
+                        if (typeof methodHandler === "function") {
                             response = await methodHandler(request);
                         }
                         else {
@@ -448,13 +442,10 @@ class Server {
                     break;
                 }
                 // ── WebSocket Upgrade ──────────────────────────────────────────────
-                if (upgradeRequested) {
-                    // Resposta 101 é tratada pelo evento 'upgrade' do servidor
-                    // Armazenamos o upgradeData pra usar quando o evento disparar
-                    ;
-                    nodeReq.__upgradeData = upgradeData;
+                // O pipeline de WS roda no evento 'upgrade' do servidor.
+                // Se req.upgrade() foi chamado num handler HTTP normal, apenas ignora.
+                if (upgradeRequested)
                     return;
-                }
                 // ── Fallback ───────────────────────────────────────────────────────
                 if (!response && this.#fallback)
                     response = await this.#fallback(request);
@@ -464,42 +455,111 @@ class Server {
             catch (err) {
                 try {
                     const errResponse = (await this.#errorHandler?.(err)) ??
-                        systemResponses[500]({
-                            url: `http://${nodeReq.headers.host ?? 'localhost'}${nodeReq.url}`,
-                        });
+                        systemResponses[500]({ url: `http://${nodeReq.headers.host ?? "localhost"}${nodeReq.url}` });
                     await this.#sendResponse(nodeRes, errResponse);
                 }
                 catch {
                     nodeRes.writeHead(500);
-                    nodeRes.end('Internal Server Error');
+                    nodeRes.end("Internal Server Error");
                 }
             }
         });
         // ── WebSocket upgrade event ──────────────────────────────────────────────
+        // IMPORTANTE: o Node.js emite 'upgrade' em vez de 'request' para conexões
+        // WebSocket — o HTTP handler nunca roda. Por isso rodamos o pipeline
+        // completo (auth, middleware, routing) aqui antes do handshake.
         if (this.#wsHandlers) {
-            server.on('upgrade', (nodeReq, socket, head) => {
-                // Verifica origin se allowedOrigins está configurado
-                const allowedOrigins = this.#wsHandlers.allowedOrigins;
-                if (allowedOrigins && allowedOrigins.length > 0) {
-                    const origin = nodeReq.headers['origin'] ?? '';
-                    if (!allowedOrigins.includes(origin)) {
-                        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            server.on("upgrade", async (nodeReq, socket, head) => {
+                try {
+                    // ── Origin check ───────────────────────────────────────────────
+                    const allowedOrigins = this.#wsHandlers.allowedOrigins;
+                    if (allowedOrigins && allowedOrigins.length > 0) {
+                        const origin = nodeReq.headers["origin"] ?? "";
+                        if (!allowedOrigins.includes(origin)) {
+                            socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+                            socket.destroy();
+                            return;
+                        }
+                    }
+                    // ── Rate limit ─────────────────────────────────────────────────
+                    if (this.#rateLimitOptions) {
+                        const ip = this.#extractIp(nodeReq);
+                        const rl = this.#checkRateLimit(ip);
+                        if (!rl.allowed) {
+                            socket.write("HTTP/1.1 429 Too Many Requests\r\n\r\n");
+                            socket.destroy();
+                            return;
+                        }
+                    }
+                    // ── Monta Request igual ao HTTP handler ────────────────────────
+                    const host = nodeReq.headers.host ?? "localhost";
+                    const url = `http://${host}${nodeReq.url}`;
+                    const pathname = new URL(url).pathname;
+                    const request = new Request(url, {
+                        method: "GET",
+                        headers: nodeReq.headers,
+                    });
+                    request.params = {};
+                    request.user = null;
+                    let upgradeData = undefined;
+                    request.upgrade = (data) => {
+                        upgradeData = data;
+                        return new Response(null, { status: 101 });
+                    };
+                    // ── Auth ───────────────────────────────────────────────────────
+                    if (this.#auth) {
+                        request.user = await this.#auth(request);
+                    }
+                    // ── Global middleware ──────────────────────────────────────────
+                    const globalResult = await this.#runMiddlewareChain(this.#globalMiddleware, request);
+                    if (globalResult) {
+                        socket.write(`HTTP/1.1 ${globalResult.status} Error\r\n\r\n`);
                         socket.destroy();
                         return;
                     }
-                }
-                // Rate limit também se aplica ao WS
-                if (this.#rateLimitOptions) {
-                    const ip = this.#extractIp(nodeReq);
-                    const rl = this.#checkRateLimit(ip);
-                    if (!rl.allowed) {
-                        socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n');
+                    // ── Routing ────────────────────────────────────────────────────
+                    let routed = false;
+                    for (const route of this.#routes) {
+                        const match = pathname.match(route.regex);
+                        if (!match)
+                            continue;
+                        request.params = this.#extractParams(match, route.keys);
+                        const { handler } = route;
+                        routed = true;
+                        if (typeof handler === "object") {
+                            const routeMiddleware = handler.middleware ?? [];
+                            const routeResult = await this.#runMiddlewareChain(routeMiddleware, request);
+                            if (routeResult) {
+                                socket.write(`HTTP/1.1 ${routeResult.status} Error\r\n\r\n`);
+                                socket.destroy();
+                                return;
+                            }
+                            const getHandler = handler["GET"];
+                            if (typeof getHandler === "function") {
+                                await getHandler(request);
+                            }
+                        }
+                        else {
+                            await handler(request);
+                        }
+                        break;
+                    }
+                    if (!routed) {
+                        socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
                         socket.destroy();
                         return;
                     }
+                    // ── Handshake ──────────────────────────────────────────────────
+                    this.#handleWebSocketUpgrade(nodeReq, socket, head, upgradeData);
                 }
-                const upgradeData = nodeReq.__upgradeData;
-                this.#handleWebSocketUpgrade(nodeReq, socket, head, upgradeData);
+                catch (err) {
+                    console.error("[WS upgrade error]", err);
+                    try {
+                        socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+                    }
+                    catch { /* já destruído */ }
+                    socket.destroy();
+                }
             });
         }
         return server;

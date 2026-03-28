@@ -22,7 +22,7 @@ export type BunLikeRequest<TUser = unknown> = Request & {
 };
 export type Middleware<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | null | Promise<Response | null>;
 export type RouteHandler<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | Promise<Response>;
-export type MethodMap<TUser = unknown> = Partial<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', RouteHandler<TUser>>> & {
+export type MethodMap<TUser = unknown> = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler<TUser>>> & {
     middleware?: Middleware<TUser>[];
 };
 export type Routes<TUser = unknown> = Record<string, RouteHandler<TUser> | MethodMap<TUser>>;
