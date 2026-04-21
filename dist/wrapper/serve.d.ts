@@ -22,7 +22,7 @@ export type BunLikeRequest<TUser = unknown> = Request & {
 };
 export type Middleware<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | null | Promise<Response | null>;
 export type RouteHandler<TUser = unknown> = (req: BunLikeRequest<TUser>) => Response | Promise<Response>;
-export type MethodMap<TUser = unknown> = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler<TUser>>> & {
+export type MethodMap<TUser = unknown> = Partial<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', RouteHandler<TUser>>> & {
     middleware?: Middleware<TUser>[];
 };
 export type Routes<TUser = unknown> = Record<string, RouteHandler<TUser> | MethodMap<TUser>>;
@@ -32,6 +32,42 @@ export type RateLimitResult = {
     remaining: number;
     reset: number;
     retryAfter?: number;
+};
+export type LogLevel = 'minimal' | 'standard' | 'verbose';
+export type LoggerOptions = {
+    /**
+     * Nível de detalhe do logger.
+     * - `minimal`  — método, path, status e tempo
+     * - `standard` — + headers da request (default)
+     * - `verbose`  — + body da response (se JSON)
+     */
+    level?: LogLevel;
+    /**
+     * Prefixo exibido em cada linha de log.
+     * Default: nenhum.
+     */
+    prefix?: string;
+    /**
+     * Rotas que não devem ser logadas. Aceita strings exatas ou RegExp.
+     * Útil pra suprimir health checks e afins.
+     * @example ['/health', /\/metrics/]
+     */
+    ignore?: Array<string | RegExp>;
+    /**
+     * Callback customizado — se fornecido, substitui o logger padrão.
+     * Recebe todas as informações da requisição e pode fazer qualquer coisa.
+     */
+    onLog?: (entry: LogEntry) => void;
+};
+export type LogEntry = {
+    method: string;
+    pathname: string;
+    status: number;
+    durationMs: number;
+    requestHeaders: Record<string, string>;
+    responseBody: string | null;
+    timestamp: string;
+    ip: string;
 };
 export type WSContext<TData = unknown> = {
     /** Envia dados para o cliente. */
@@ -68,8 +104,32 @@ export type RateLimitOptions = {
     trustProxy?: boolean;
 };
 export type AuthFunction<TUser> = (req: BunLikeRequest<TUser>) => TUser | null | Promise<TUser | null>;
+export type ListenOptions = {
+    port?: number;
+    host?: string;
+    /**
+     * Se true, habilita o logger com nível `standard`.
+     * Pode também ser um objeto `LoggerOptions` para controle fino.
+     */
+    logger?: boolean | LoggerOptions;
+    /**
+     * Exibe um banner customizado ao iniciar. Se omitido, exibe a URL padrão.
+     * Recebe a URL do servidor como argumento.
+     */
+    banner?: (url: string) => void;
+    /**
+     * Callback chamado quando o servidor está pronto para receber conexões.
+     */
+    onReady?: (url: string) => void;
+};
 export interface ServeOptions<TUser = unknown> {
     port?: number;
+    host?: string;
+    /**
+     * Se true, habilita o logger com nível `standard`.
+     * Pode também ser um objeto `LoggerOptions` para controle fino.
+     */
+    logger?: boolean | LoggerOptions;
     routes?: Routes<TUser>;
     /** Middlewares globais — rodam em toda request, em ordem. */
     middleware?: Middleware<TUser>[];
@@ -90,9 +150,20 @@ export interface ServeOptions<TUser = unknown> {
 export declare function requireAuth<TUser = unknown>(req: BunLikeRequest<TUser>): Response | null;
 declare class Server<TUser = unknown> {
     #private;
-    constructor({ port, routes, middleware, fetch: fallback, error: errorHandler, auth, rateLimit, websocket, }?: ServeOptions<TUser>);
+    constructor({ port, host, logger, routes, middleware, fetch: fallback, error: errorHandler, auth, rateLimit, websocket, }?: ServeOptions<TUser>);
     get url(): URL;
-    listen(): this;
+    /**
+     * Inicia o servidor.
+     *
+     * Aceita três formas de chamada:
+     * ```ts
+     * server.listen()
+     * server.listen(() => console.log('ready'))
+     * server.listen({ port: 4000, host: '127.0.0.1', logger: true }, () => console.log('ready'))
+     * server.listen({ port: 4000, banner: (url) => console.log(`up at ${url}`) })
+     * ```
+     */
+    listen(optionsOrCallback?: ListenOptions | (() => void), maybeCallback?: () => void): this;
     stop(): Promise<void>;
 }
 /**
@@ -102,19 +173,17 @@ declare class Server<TUser = unknown> {
  * @example
  * import { serve } from 'data-handlers/serve'
  *
- * const myAuth = async (req) => {
- *   const token = req.headers.get('authorization')?.replace('Bearer ', '')
- *   return token ? verifyToken(token) : null
- * }
- *
  * serve({
  *   port: 3000,
- *   auth: myAuth,
- *   middleware: [logger],
+ *   logger: { level: 'verbose', prefix: 'api', ignore: ['/health'] },
+ *   auth: async (req) => {
+ *     const token = req.headers.get('authorization')?.replace('Bearer ', '')
+ *     return token ? verifyToken(token) : null
+ *   },
  *   rateLimit: { windowMs: 60_000, max: 100 },
  *   routes: {
  *     '/users': {
- *       GET: (req) => Response.json(users),
+ *       GET:  (req) => Response.json(users),
  *       POST: async (req) => {
  *         const body = await req.json()
  *         return Response.json(body, { status: 201 })
@@ -137,6 +206,9 @@ declare class Server<TUser = unknown> {
  *     close:   (ws, code) => console.log('desconectou:', code),
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
+ * }).listen({
+ *   banner: (url) => console.log(`running at ${url}`),
+ *   onReady: (url) => setupHealthCheck(url),
  * })
  */
 export declare function serve<TUser = unknown>(options?: ServeOptions<TUser>): Server<TUser>;

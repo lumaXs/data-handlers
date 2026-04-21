@@ -1,9 +1,9 @@
 import {
-   registry,
-   formatType,
-   register,
-   registerAliases,
-   createPlugin,
+  registry,
+  formatType,
+  register,
+  registerAliases,
+  createPlugin,
 } from './src/main.js'
 import './plugins/index.js'
 
@@ -11,16 +11,16 @@ import './plugins/index.js'
 
 export type { HandlerFn } from './src/main.js'
 export type {
-   ValidateResult,
-   TypeAccessor,
-   HandlersMeta,
-   HandlersProxy,
+  ValidateResult,
+  TypeAccessor,
+  HandlersMeta,
+  HandlersProxy,
 } from './api/handlers.js'
 export type {
-   FieldConfig,
-   SchemaShape,
-   InferSchema,
-   SchemaParseResult,
+  FieldConfig,
+  SchemaShape,
+  InferSchema,
+  SchemaParseResult,
 } from './schema/index.js'
 export type { NameHandlerOptions } from './handlers/nameHandler.js'
 export type { NumberHandlerOptions } from './handlers/numberHandler.js'
@@ -43,15 +43,15 @@ export { Schema, schema, SchemaError } from './schema/index.js'
 // ─── Top-level helpers ────────────────────────────────────────────────────────
 
 export interface NormalizeParams<TValue = unknown> {
-   type: string
-   value: TValue
-   options?: Record<string, unknown>
+  type: string
+  value: TValue
+  options?: Record<string, unknown>
 }
 
 export interface ValidateParams<TValue = unknown> {
-   type: string
-   value: TValue
-   options?: Record<string, unknown>
+  type: string
+  value: TValue
+  options?: Record<string, unknown>
 }
 
 /**
@@ -61,18 +61,18 @@ export interface ValidateParams<TValue = unknown> {
  * normalize({ type: 'name', value: '  joao  ' }) // 'Joao'
  */
 export function normalize<TValue = unknown>({
-   type,
-   value,
-   options,
+  type,
+  value,
+  options,
 }: NormalizeParams<TValue>): string {
-   const key = formatType(type)
-   const handler = registry.get(key)
-   if (!handler) {
-      throw new TypeError(
-         `[normalize] Unknown type: ${key}. Available: ${[...registry.keys()].join(', ')}.`,
-      )
-   }
-   return handler(value, options) as string
+  const key = formatType(type)
+  const handler = registry.get(key)
+  if (!handler) {
+    throw new TypeError(
+      `[normalize] Unknown type: ${key}. Available: ${[...registry.keys()].join(', ')}.`,
+    )
+  }
+  return handler(value, options) as string
 }
 
 /**
@@ -83,18 +83,18 @@ export function normalize<TValue = unknown>({
  * // { valid: true, value: '111.444.777-35', error: null }
  */
 export function validate<TValue = unknown>({
-   type,
-   value,
-   options,
+  type,
+  value,
+  options,
 }: ValidateParams<TValue>) {
-   try {
-      const result = normalize({
-         type,
-         value,
-         ...(options !== undefined ? { options } : {}),
-      })
-      return { valid: true, value: result, error: null }
-   } catch (err) {
-      return { valid: false, value: null, error: (err as Error).message }
-   }
+  try {
+    const result = normalize({
+      type,
+      value,
+      ...(options !== undefined ? { options } : {}),
+    })
+    return { valid: true, value: result, error: null }
+  } catch (err) {
+    return { valid: false, value: null, error: (err as Error).message }
+  }
 }
