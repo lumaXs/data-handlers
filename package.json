@@ -1,68 +1,68 @@
 {
-  "name": "data-handlers",
-  "version": "1.2.3",
-  "description": "Zero-dependency data normalization and validation for JavaScript and TypeScript, with pluggable handlers and first-class support for Brazilian formats (CPF, CNPJ, CEP).",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./serve": {
-      "import": "./dist/wrapper/serve.js",
-      "types": "./dist/wrapper/serve.d.ts"
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "release:patch": "pnpm build && pnpm test && pnpm version patch && pnpm publish",
-    "release:minor": "pnpm build && pnpm test && pnpm version minor && pnpm publish",
-    "release:major": "pnpm build && pnpm test && pnpm version major && pnpm publish",
-    "build": "rm -rf dist && tsc"
-  },
-  "keywords": [
-    "validation",
-    "normalize",
-    "normalization",
-    "schema",
-    "javascript",
-    "typescript",
-    "zero-dependency",
-    "api",
-    "backend",
-    "input",
-    "form",
-    "cpf",
-    "cnpj",
-    "cep",
-    "rg",
-    "phone",
-    "email",
-    "slug",
-    "color",
-    "intl",
-    "plugin",
-    "string",
-    "number",
-    "date",
-    "br",
-    "brazil",
-    "brasil"
-  ],
-  "author": "Emersom Oliveira",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18"
-  },
-  "devDependencies": {
-    "vitest": "^4.0.18",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.0.0"
-  }
+   "name": "data-handlers",
+   "version": "1.2.3",
+   "description": "Zero-dependency data normalization and validation for JavaScript and TypeScript, with pluggable handlers and first-class support for Brazilian formats (CPF, CNPJ, CEP).",
+   "type": "module",
+   "main": "./dist/index.js",
+   "types": "./dist/index.d.ts",
+   "exports": {
+      ".": {
+         "import": "./dist/index.js",
+         "types": "./dist/index.d.ts"
+      },
+      "./serve": {
+         "import": "./dist/wrapper/serve.js",
+         "types": "./dist/wrapper/serve.d.ts"
+      }
+   },
+   "files": [
+      "dist"
+   ],
+   "scripts": {
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "release:patch": "pnpm build && pnpm test && pnpm version patch && pnpm publish",
+      "release:minor": "pnpm build && pnpm test && pnpm version minor && pnpm publish",
+      "release:major": "pnpm build && pnpm test && pnpm version major && pnpm publish",
+      "build": "rm -rf dist && tsc"
+   },
+   "keywords": [
+      "validation",
+      "normalize",
+      "normalization",
+      "schema",
+      "javascript",
+      "typescript",
+      "zero-dependency",
+      "api",
+      "backend",
+      "input",
+      "form",
+      "cpf",
+      "cnpj",
+      "cep",
+      "rg",
+      "phone",
+      "email",
+      "slug",
+      "color",
+      "intl",
+      "plugin",
+      "string",
+      "number",
+      "date",
+      "br",
+      "brazil",
+      "brasil"
+   ],
+   "author": "Emersom Oliveira",
+   "license": "MIT",
+   "engines": {
+      "node": ">=18"
+   },
+   "devDependencies": {
+      "vitest": "^4.0.18",
+      "typescript": "^5.4.0",
+      "@types/node": "^20.0.0"
+   }
 }

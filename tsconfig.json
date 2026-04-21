@@ -1,35 +1,31 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ES2022", "DOM"],
-    "types": ["node"],
-    "outDir": "./dist",
-    "rootDir": "./",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
-  },
-  "include": [
-    "index.ts",
-    "src",
-    "handlers",
-    "schema",
-    "api",
-    "plugins",
-    "wrapper"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts"
-  ]
+   "compilerOptions": {
+      "target": "ES2022",
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext",
+      "lib": ["ES2022", "DOM"],
+      "types": ["node"],
+      "outDir": "./dist",
+      "rootDir": "./",
+      "declaration": true,
+      "declarationMap": true,
+      "sourceMap": true,
+      "strict": true,
+      "noUncheckedIndexedAccess": true,
+      "exactOptionalPropertyTypes": true,
+      "noImplicitReturns": true,
+      "noFallthroughCasesInSwitch": true,
+      "forceConsistentCasingInFileNames": true,
+      "skipLibCheck": true
+   },
+   "include": [
+      "index.ts",
+      "src",
+      "handlers",
+      "schema",
+      "api",
+      "plugins",
+      "wrapper"
+   ],
+   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

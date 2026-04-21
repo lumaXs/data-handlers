@@ -65,6 +65,13 @@ export const systemResponses = {
         path: new URL(req.url).pathname,
         timestamp: new Date().toISOString(),
     }, { status: 500 }),
+    503: (req, message = 'Service Unavailable') => Response.json({
+        statusCode: 503,
+        error: 'Service Unavailable',
+        message,
+        path: new URL(req.url).pathname,
+        timestamp: new Date().toISOString(),
+    }, { status: 503, headers: { Connection: 'close', 'Retry-After': '30' } }),
 };
 // ─── Middleware helpers ────────────────────────────────────────────────────────
 /**
@@ -122,7 +129,9 @@ function formatDuration(ms) {
     return `${(ms / 1000).toFixed(2)}s`;
 }
 function isIgnored(pathname, ignore) {
-    return ignore.some(pattern => typeof pattern === 'string' ? pattern === pathname : pattern.test(pathname));
+    return ignore.some(pattern => typeof pattern === 'string'
+        ? pattern === pathname
+        : pattern.test(pathname));
 }
 async function runLogger(entry, opts) {
     const level = opts.level ?? 'standard';
@@ -188,7 +197,13 @@ class Server {
     #rateLimitStore;
     #wsHandlers;
     #server;
-    constructor({ port = 3000, host = '0.0.0.0', logger = false, routes = {}, middleware = [], fetch: fallback, error: errorHandler, auth, rateLimit, websocket, } = {}) {
+    // ── Graceful Shutdown state ─────────────────────────────────────────────────
+    #isShuttingDown = false;
+    #activeRequests = 0;
+    #openConnections = new Set();
+    #openWebSockets = new Set();
+    #shutdownOptions;
+    constructor({ port = 3000, host = '0.0.0.0', logger = false, routes = {}, middleware = [], fetch: fallback, error: errorHandler, auth, rateLimit, websocket, shutdown, } = {}) {
         this.#port = port;
         this.#host = host;
         this.#loggerOpts = this.#resolveLogger(logger);
@@ -207,7 +222,22 @@ class Server {
             : undefined;
         this.#rateLimitStore = new Map();
         this.#wsHandlers = websocket;
+        this.#shutdownOptions = shutdown;
         this.#server = this.#createServer();
+        // Registra sinais de OS se configurado
+        if (shutdown?.signals ?? ['SIGINT', 'SIGTERM']) {
+            const sigs = shutdown?.signals ?? ['SIGINT', 'SIGTERM'];
+            if (shutdown) {
+                for (const sig of sigs) {
+                    process.once(sig, () => {
+                        this.gracefulShutdown().catch(err => {
+                            console.error('[shutdown error]', err);
+                            process.exit(1);
+                        });
+                    });
+                }
+            }
+        }
     }
     // ── Logger resolver ─────────────────────────────────────────────────────────
     #resolveLogger(logger) {
@@ -378,6 +408,7 @@ class Server {
                 socket.end();
             },
         };
+        this.#openWebSockets.add(ws);
         handlers.open?.(ws);
         // ── Heartbeat ────────────────────────────────────────────────────────────
         let heartbeatTimer;
@@ -482,6 +513,7 @@ class Server {
         });
         socket.on('close', () => {
             clearInterval(heartbeatTimer);
+            this.#openWebSockets.delete(ws);
             if (ws.readyState !== 3) {
                 ws.readyState = 3;
                 handlers.close?.(ws, 1006, 'Connection lost');
@@ -491,6 +523,33 @@ class Server {
     // ── Request Handler ─────────────────────────────────────────────────────────
     #createServer() {
         const server = http.createServer(async (nodeReq, nodeRes) => {
+            // ── Shutdown guard ───────────────────────────────────────────────────
+            if (this.#isShuttingDown) {
+                const res = systemResponses[503]?.({
+                    url: `http://${nodeReq.headers.host ?? 'localhost'}${nodeReq.url}`,
+                }) ??
+                    Response.json({
+                        statusCode: 503,
+                        error: 'Service Unavailable',
+                        message: 'Server is shutting down',
+                        path: nodeReq.url ?? '/',
+                        timestamp: new Date().toISOString(),
+                    }, {
+                        status: 503,
+                        headers: { Connection: 'close', 'Retry-After': '30' },
+                    });
+                nodeRes.writeHead(503, {
+                    Connection: 'close',
+                    'Retry-After': '30',
+                });
+                const body = await res.arrayBuffer();
+                nodeRes.end(Buffer.from(body));
+                return;
+            }
+            this.#activeRequests++;
+            nodeReq.once('close', () => {
+                this.#activeRequests--;
+            });
             const start = Date.now();
             const host = nodeReq.headers.host ?? 'localhost';
             const url = `http://${host}${nodeReq.url}`;
@@ -631,6 +690,11 @@ class Server {
                 }
             }
         });
+        // ── Connection tracking (for graceful shutdown) ──────────────────────────
+        server.on('connection', (socket) => {
+            this.#openConnections.add(socket);
+            socket.once('close', () => this.#openConnections.delete(socket));
+        });
         // ── WebSocket upgrade event ───────────────────────────────────────────────
         if (this.#wsHandlers) {
             server.on('upgrade', async (nodeReq, socket, head) => {
@@ -724,6 +788,86 @@ class Server {
         return server;
     }
     // ── Public API ──────────────────────────────────────────────────────────────
+    // ── Graceful Shutdown ───────────────────────────────────────────────────────
+    /**
+     * Encerra o servidor de forma graciosa:
+     * 1. Para de aceitar novas conexões (retorna 503 para requests subsequentes)
+     * 2. Envia close 1001 (Going Away) para todos os WebSockets abertos
+     * 3. Aguarda requests ativas finalizarem (ou até o timeout)
+     * 4. Força destruição de conexões restantes
+     * 5. Chama `onShutdown` para limpeza (DB, cache, etc)
+     *
+     * @param overrides - Sobrescreve as opções de shutdown configuradas no `serve()`
+     */
+    async gracefulShutdown(overrides) {
+        if (this.#isShuttingDown)
+            return;
+        this.#isShuttingDown = true;
+        const opts = { ...this.#shutdownOptions, ...overrides };
+        const timeout = opts.timeout ?? 10_000;
+        const onShutdown = opts.onShutdown;
+        if (this.#loggerOpts) {
+            console.info(`\x1b[33m[shutdown]\x1b[0m \x1b[90mstarting graceful shutdown (timeout: ${timeout}ms)\x1b[0m`);
+        }
+        // ── 1. Para de aceitar novas conexões ─────────────────────────────────────
+        this.#server.close();
+        // ── 2. Fecha todos os WebSockets abertos com código 1001 ──────────────────
+        for (const ws of this.#openWebSockets) {
+            try {
+                ws.close(1001, 'Server shutting down');
+            }
+            catch {
+                // já fechado
+            }
+        }
+        this.#openWebSockets.clear();
+        // ── 3. Aguarda requests ativas (ou timeout) ───────────────────────────────
+        await new Promise(resolve => {
+            if (this.#activeRequests === 0) {
+                resolve();
+                return;
+            }
+            if (this.#loggerOpts) {
+                console.info(`\x1b[90m[shutdown] waiting for ${this.#activeRequests} active request(s)...\x1b[0m`);
+            }
+            const checkInterval = setInterval(() => {
+                if (this.#activeRequests === 0) {
+                    clearInterval(checkInterval);
+                    clearTimeout(forceTimer);
+                    resolve();
+                }
+            }, 50);
+            const forceTimer = setTimeout(() => {
+                clearInterval(checkInterval);
+                if (this.#loggerOpts) {
+                    console.warn(`\x1b[31m[shutdown] timeout reached — forcing close (${this.#activeRequests} request(s) still active)\x1b[0m`);
+                }
+                resolve();
+            }, timeout);
+        });
+        // ── 4. Força destruição de conexões TCP restantes ─────────────────────────
+        for (const socket of this.#openConnections) {
+            try {
+                socket.destroy();
+            }
+            catch {
+                // já destruído
+            }
+        }
+        this.#openConnections.clear();
+        // ── 5. Hook de limpeza do usuário ─────────────────────────────────────────
+        if (onShutdown) {
+            try {
+                await onShutdown();
+            }
+            catch (err) {
+                console.error('[shutdown] onShutdown hook threw:', err);
+            }
+        }
+        if (this.#loggerOpts) {
+            console.info('\x1b[32m[shutdown] server stopped\x1b[0m');
+        }
+    }
     get url() {
         return new URL(`http://localhost:${this.#port}`);
     }
@@ -770,7 +914,7 @@ class Server {
                 banner(href);
             }
             else if (this.#loggerOpts) {
-                console.info(`${ANSI.dim}server${ANSI.reset} ${ANSI.cyan}${href}${ANSI.reset}`);
+                console.info(`${ANSI.dim}server listening on${ANSI.reset} ${ANSI.cyan}${href}${ANSI.reset}`);
             }
             onReady?.(href);
             callback?.();
@@ -847,7 +991,7 @@ function encodeWSFrame(payload, opcode) {
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
  * }).listen({
- *   banner: (url) => console.log(`running at ${url}`),
+ *   banner: (url) => console.log(`🚀 running at ${url}`),
  *   onReady: (url) => setupHealthCheck(url),
  * })
  */

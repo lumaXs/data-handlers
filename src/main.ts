@@ -9,8 +9,8 @@ import { anyHandler } from '../handlers/anyHandler.js'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type HandlerFn<TValue = unknown, TOptions = Record<string, unknown>> = (
-  value: TValue,
-  options?: TOptions,
+   value: TValue,
+   options?: TOptions,
 ) => unknown
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -20,10 +20,10 @@ export type HandlerFn<TValue = unknown, TOptions = Record<string, unknown>> = (
  * Toda a API é case-insensitive por design.
  */
 export function formatType(type: string): string {
-  if (typeof type !== 'string') {
-    throw new TypeError('[normalize] Type must be a string')
-  }
-  return type.trim().toLowerCase()
+   if (typeof type !== 'string') {
+      throw new TypeError('[normalize] Type must be a string')
+   }
+   return type.trim().toLowerCase()
 }
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
@@ -33,26 +33,26 @@ export function formatType(type: string): string {
  * Tipos embutidos: 'name', 'number', 'date', 'password', 'url', 'uuid', 'any'.
  */
 export const registry = new Map<string, HandlerFn>([
-  ['name', nameHandler],
-  ['number', numberHandler],
-  ['date', dateHandler],
-  ['password', passwordHandler],
-  ['url', urlHandler],
-  ['uuid', uuidHandler],
-  ['any', anyHandler],
+   ['name', nameHandler],
+   ['number', numberHandler],
+   ['date', dateHandler],
+   ['password', passwordHandler],
+   ['url', urlHandler],
+   ['uuid', uuidHandler],
+   ['any', anyHandler],
 ])
 
 /**
  * Registra um handler para um tipo (sobrescreve se já existir).
  */
 export function register<TValue = unknown>(
-  type: string,
-  handler: HandlerFn<TValue>,
+   type: string,
+   handler: HandlerFn<TValue>,
 ): void {
-  if (typeof handler !== 'function') {
-    throw new TypeError('[normalize] Handler must be a function')
-  }
-  registry.set(formatType(type), handler as HandlerFn)
+   if (typeof handler !== 'function') {
+      throw new TypeError('[normalize] Handler must be a function')
+   }
+   registry.set(formatType(type), handler as HandlerFn)
 }
 
 /**
@@ -62,16 +62,16 @@ export function register<TValue = unknown>(
  * registerAliases('name', 'nome', 'fullName')
  */
 export function registerAliases(type: string, ...aliases: string[]): void {
-  const key = formatType(type)
-  const handler = registry.get(key)
-  if (!handler) {
-    throw new TypeError(
-      `[normalize] Cannot alias unknown type: "${key}". Register it first.`,
-    )
-  }
-  for (const alias of aliases) {
-    registry.set(formatType(alias), handler)
-  }
+   const key = formatType(type)
+   const handler = registry.get(key)
+   if (!handler) {
+      throw new TypeError(
+         `[normalize] Cannot alias unknown type: "${key}". Register it first.`,
+      )
+   }
+   for (const alias of aliases) {
+      registry.set(formatType(alias), handler)
+   }
 }
 
 /** Alias semântico de register() para autores de plugins. */

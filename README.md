@@ -45,18 +45,18 @@ pnpm add data-handlers
 import { handlers, schema } from 'data-handlers'
 
 // Core handlers
-handlers.name.normalize('  emerson   ribeiro  ')         // 'Emerson Ribeiro'
+handlers.name.normalize('  emerson   ribeiro  ') // 'Emerson Ribeiro'
 handlers.number.normalize(1234.5, { style: 'currency', currency: 'BRL' }) // 'R$ 1.234,50'
 handlers.date.normalize(new Date(), { dateStyle: 'long', locale: 'pt-BR' }) // '5 de março de 2026'
-handlers.password.normalize('Senha@123')                 // 'Senha@123' (validated)
-handlers.url.normalize('HTTPS://EXAMPLE.COM/api')        // 'https://example.com/api'
+handlers.password.normalize('Senha@123') // 'Senha@123' (validated)
+handlers.url.normalize('HTTPS://EXAMPLE.COM/api') // 'https://example.com/api'
 handlers.uuid.normalize('550E8400-E29B-41D4-A716-446655440000') // lowercase
 
 // Brazilian plugins
-handlers.cpf.normalize('11144477735')    // '111.444.777-35'
-handlers.phone.normalize('11987654321')  // '(11) 98765-4321'
+handlers.cpf.normalize('11144477735') // '111.444.777-35'
+handlers.phone.normalize('11987654321') // '(11) 98765-4321'
 handlers.email.normalize('  User@SITE.COM  ') // 'user@site.com'
-handlers.cep.normalize('01310100')       // '01310-100'
+handlers.cep.normalize('01310100') // '01310-100'
 
 // Safe validation — never throws
 handlers.cpf.safe('000.000.000-00')
@@ -70,9 +70,9 @@ handlers.cpf.safe('000.000.000-00')
 The full list of registered types is always available at runtime — no need to check the docs for every new handler or plugin:
 
 ```js
-handlers.types   // ['name', 'number', 'date', 'password', 'url', 'uuid', 'any', 'cpf', ...]
-handlers.has('cpf')   // true
-handlers.$.types       // meta namespace, same as handlers.types
+handlers.types // ['name', 'number', 'date', 'password', 'url', 'uuid', 'any', 'cpf', ...]
+handlers.has('cpf') // true
+handlers.$.types // meta namespace, same as handlers.types
 ```
 
 ---
@@ -81,12 +81,12 @@ handlers.$.types       // meta namespace, same as handlers.types
 
 Each `handlers.<type>` exposes four methods:
 
-| Method               | Behaviour                                       |
-|----------------------|-------------------------------------------------|
-| `.normalize(v, opts)` | Normalizes; throws if invalid                  |
+| Method                | Behaviour                                       |
+| --------------------- | ----------------------------------------------- |
+| `.normalize(v, opts)` | Normalizes; throws if invalid                   |
 | `.validate(v, opts)`  | Never throws; returns `{ valid, value, error }` |
-| `.parse(v, opts)`     | Alias for `.normalize` (Zod-style)             |
-| `.safe(v, opts)`      | Alias for `.validate` (Zod-style)              |
+| `.parse(v, opts)`     | Alias for `.normalize` (Zod-style)              |
+| `.safe(v, opts)`      | Alias for `.validate` (Zod-style)               |
 
 ---
 
@@ -144,15 +144,19 @@ schema({
 ## Core handlers
 
 ### `name`
+
 Title Case with pt-BR connectives (`de`, `da`, `do`, `das`, `dos`, `e`) and English ones (`of`, `the`, `and`) kept lowercase unless first token.
 
 ### `number`
+
 Delegates to `Intl.NumberFormat`. Default locale: `pt-BR`. Throws `TypeError` for non-numbers, `RangeError` for `NaN`/`Infinity`.
 
 ### `date`
+
 Delegates to `Intl.DateTimeFormat`. Accepts `Date`, ISO strings, and numeric timestamps (ms). Default locale: `pt-BR`.
 
 ### `password`
+
 Validates a password. All rules are configurable via options:
 
 ```js
@@ -160,66 +164,81 @@ handlers.password.normalize('Senha@123')
 // default: minLength 8, requireUppercase, requireLowercase, requireSpecial
 
 handlers.password.normalize('SenhaSegura@1', {
-    minLength:        12,
-    requireNumber:    true,   // default: false
-    requireSpecial:   true,
-    requireUppercase: true,
-    requireLowercase: true,
+   minLength: 12,
+   requireNumber: true, // default: false
+   requireSpecial: true,
+   requireUppercase: true,
+   requireLowercase: true,
 })
 ```
 
 ### `url`
+
 Validates and normalizes URLs. Lowercases the host, preserves path and query.
 
 ```js
-handlers.url.normalize('HTTPS://EXAMPLE.COM/path')  // 'https://example.com/path'
+handlers.url.normalize('HTTPS://EXAMPLE.COM/path') // 'https://example.com/path'
 handlers.url.normalize('ftp://x.com', { protocols: ['ftp'] }) // custom protocol
 ```
 
 ### `uuid`
+
 Validates UUID format. Supports v1, v3, v4, v5 and v7.
 
 ```js
 handlers.uuid.normalize('550E8400-E29B-41D4-A716-446655440000')
 // '550e8400-e29b-41d4-a716-446655440000'
 
-handlers.uuid.normalize(id, { version: 4 })      // enforce v4
-handlers.uuid.normalize(id, { uppercase: true })  // return uppercase
+handlers.uuid.normalize(id, { version: 4 }) // enforce v4
+handlers.uuid.normalize(id, { uppercase: true }) // return uppercase
 ```
 
 ### `any`
+
 Passes any non-null value through without normalizing. Useful in schemas for fields without a specific handler. Supports `demandType` to restrict the primitive type, and `transform` for inline validation or transformation logic.
 
 ```js
 // Basic usage
-handlers.any.normalize('text')   // 'text'
-handlers.any.normalize(42)       // 42
-handlers.any.normalize(true)     // true
+handlers.any.normalize('text') // 'text'
+handlers.any.normalize(42) // 42
+handlers.any.normalize(true) // true
 
 // demandType — restrict accepted primitive type
-handlers.any.normalize(42,  { demandType: 'number' })   // 42
-handlers.any.safe('oi',     { demandType: 'number' })   // { valid: false, ... }
+handlers.any.normalize(42, { demandType: 'number' }) // 42
+handlers.any.safe('oi', { demandType: 'number' }) // { valid: false, ... }
 
 // transform — inline callback, runs after demandType
 handlers.any.normalize(150, {
-    demandType: 'number',
-    transform:  (v) => Math.min(100, v), // clamp to 100
+   demandType: 'number',
+   transform: v => Math.min(100, v), // clamp to 100
 }) // 100
 
 // transform can throw for custom validation
 handlers.any.normalize(value, {
-    transform: (v) => {
-        if (!Array.isArray(v)) throw new TypeError('[normalize:any] Expected array.')
-        return v.map(t => t.trim().toLowerCase())
-    }
+   transform: v => {
+      if (!Array.isArray(v))
+         throw new TypeError('[normalize:any] Expected array.')
+      return v.map(t => t.trim().toLowerCase())
+   },
 })
 
 // In a schema
 schema({
-    tag:   'any',
-    score: { type: 'any', options: { demandType: 'number', transform: (v) => Math.max(0, Math.min(100, v)) } },
-    tags:  { type: 'any', options: { transform: (v) => Array.isArray(v) ? v.map(t => t.toLowerCase()) : [v] } },
-    meta:  { type: 'any', optional: true },
+   tag: 'any',
+   score: {
+      type: 'any',
+      options: {
+         demandType: 'number',
+         transform: v => Math.max(0, Math.min(100, v)),
+      },
+   },
+   tags: {
+      type: 'any',
+      options: {
+         transform: v => (Array.isArray(v) ? v.map(t => t.toLowerCase()) : [v]),
+      },
+   },
+   meta: { type: 'any', optional: true },
 })
 ```
 
@@ -229,16 +248,16 @@ schema({
 
 All plugins load automatically when importing `data-handlers`. The table below covers the main ones — the full list is always available at runtime via `handlers.types`.
 
-| Type    | Description                        |
-|---------|------------------------------------|
-| `cpf`   | Validates & formats CPF            |
-| `cnpj`  | Validates & formats CNPJ           |
-| `phone` | Formats Brazilian phone numbers    |
-| `cep`   | Formats CEP                        |
-| `email` | Validates & normalizes email       |
-| `rg`    | Formats Brazilian RG               |
-| `slug`  | Generates URL-friendly slugs       |
-| `color` | Normalizes hex/rgb colors          |
+| Type    | Description                     |
+| ------- | ------------------------------- |
+| `cpf`   | Validates & formats CPF         |
+| `cnpj`  | Validates & formats CNPJ        |
+| `phone` | Formats Brazilian phone numbers |
+| `cep`   | Formats CEP                     |
+| `email` | Validates & normalizes email    |
+| `rg`    | Formats Brazilian RG            |
+| `slug`  | Generates URL-friendly slugs    |
+| `color` | Normalizes hex/rgb colors       |
 
 ---
 
@@ -247,11 +266,16 @@ All plugins load automatically when importing `data-handlers`. The table below c
 ```js
 import { register, registerAliases, createPlugin } from 'data-handlers'
 
-register('plate', (value) => {
-    const clean = String(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
-    if (!/^[A-Z]{3}[0-9]{4}$/.test(clean) && !/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(clean))
-        throw new TypeError(`[normalize:plate] Invalid plate: ${value}`)
-    return `${clean.slice(0, 3)}-${clean.slice(3)}`
+register('plate', value => {
+   const clean = String(value)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+   if (
+      !/^[A-Z]{3}[0-9]{4}$/.test(clean) &&
+      !/^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(clean)
+   )
+      throw new TypeError(`[normalize:plate] Invalid plate: ${value}`)
+   return `${clean.slice(0, 3)}-${clean.slice(3)}`
 })
 
 registerAliases('name', 'nome', 'fullName')
@@ -266,11 +290,24 @@ Written in JS with full `.d.ts` declarations. All types exported:
 
 ```ts
 import type {
-    Handler, TypeAccessor, HandlersProxy, ValidateResult,
-    Schema, SchemaShape, FieldConfig, SchemaParseResult,
-    NameHandlerOptions, NumberHandlerOptions, DateHandlerOptions,
-    PasswordHandlerOptions, UrlHandlerOptions, UuidHandlerOptions,
-    AnyHandlerOptions, SlugHandlerOptions, ColorHandlerOptions, RgHandlerOptions,
+   Handler,
+   TypeAccessor,
+   HandlersProxy,
+   ValidateResult,
+   Schema,
+   SchemaShape,
+   FieldConfig,
+   SchemaParseResult,
+   NameHandlerOptions,
+   NumberHandlerOptions,
+   DateHandlerOptions,
+   PasswordHandlerOptions,
+   UrlHandlerOptions,
+   UuidHandlerOptions,
+   AnyHandlerOptions,
+   SlugHandlerOptions,
+   ColorHandlerOptions,
+   RgHandlerOptions,
 } from 'data-handlers'
 ```
 

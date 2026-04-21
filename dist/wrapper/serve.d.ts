@@ -104,6 +104,23 @@ export type RateLimitOptions = {
     trustProxy?: boolean;
 };
 export type AuthFunction<TUser> = (req: BunLikeRequest<TUser>) => TUser | null | Promise<TUser | null>;
+export type ShutdownOptions = {
+    /**
+     * Tempo máximo em ms para aguardar requests ativas finalizarem.
+     * Após o timeout, conexões são destruídas à força. Default: 10000 (10s).
+     */
+    timeout?: number;
+    /**
+     * Sinais do processo que disparam o shutdown gracioso.
+     * Default: ['SIGINT', 'SIGTERM']
+     */
+    signals?: NodeJS.Signals[];
+    /**
+     * Hook de limpeza — fechar DB, limpar cache, flush de logs etc.
+     * Executado após todas as requests ativas finalizarem (ou após timeout).
+     */
+    onShutdown?: () => Promise<void>;
+};
 export type ListenOptions = {
     port?: number;
     host?: string;
@@ -141,6 +158,10 @@ export interface ServeOptions<TUser = unknown> {
     auth?: AuthFunction<TUser>;
     rateLimit?: RateLimitOptions;
     websocket?: WSHandlers;
+    /**
+     * Configura o graceful shutdown — sinais, timeout e hook de limpeza.
+     */
+    shutdown?: ShutdownOptions;
 }
 /**
  * Middleware pronto pra usar: bloqueia requests sem req.user com 401.
@@ -150,7 +171,18 @@ export interface ServeOptions<TUser = unknown> {
 export declare function requireAuth<TUser = unknown>(req: BunLikeRequest<TUser>): Response | null;
 declare class Server<TUser = unknown> {
     #private;
-    constructor({ port, host, logger, routes, middleware, fetch: fallback, error: errorHandler, auth, rateLimit, websocket, }?: ServeOptions<TUser>);
+    constructor({ port, host, logger, routes, middleware, fetch: fallback, error: errorHandler, auth, rateLimit, websocket, shutdown, }?: ServeOptions<TUser>);
+    /**
+     * Encerra o servidor de forma graciosa:
+     * 1. Para de aceitar novas conexões (retorna 503 para requests subsequentes)
+     * 2. Envia close 1001 (Going Away) para todos os WebSockets abertos
+     * 3. Aguarda requests ativas finalizarem (ou até o timeout)
+     * 4. Força destruição de conexões restantes
+     * 5. Chama `onShutdown` para limpeza (DB, cache, etc)
+     *
+     * @param overrides - Sobrescreve as opções de shutdown configuradas no `serve()`
+     */
+    gracefulShutdown(overrides?: Partial<ShutdownOptions>): Promise<void>;
     get url(): URL;
     /**
      * Inicia o servidor.
@@ -207,7 +239,7 @@ declare class Server<TUser = unknown> {
  *   },
  *   error: (err) => Response.json({ error: (err as Error).message }, { status: 500 })
  * }).listen({
- *   banner: (url) => console.log(`running at ${url}`),
+ *   banner: (url) => console.log(`🚀 running at ${url}`),
  *   onReady: (url) => setupHealthCheck(url),
  * })
  */
