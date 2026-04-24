@@ -1,1 +1,1 @@
-{"version":3,"file":"nameHandler.d.ts","sourceRoot":"","sources":["../../handlers/nameHandler.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,kBAAkB;IACjC,iEAAiE;IACjE,cAAc,CAAC,EAAE,MAAM,EAAE,CAAA;CAC1B;AAiBD;;;;;;;;;GASG;AACH,eAAO,MAAM,WAAW,GACtB,OAAO,OAAO,EACd,UAAS,kBAAuB,KAC/B,MAwBF,CAAA"}
+{"version":3,"file":"nameHandler.d.ts","sourceRoot":"","sources":["../../handlers/nameHandler.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,kBAAkB;IAChC,iEAAiE;IACjE,cAAc,CAAC,EAAE,MAAM,EAAE,CAAA;CAC3B;AAiBD;;;;;;;;;GASG;AACH,eAAO,MAAM,WAAW,GACrB,OAAO,OAAO,EACd,UAAS,kBAAuB,KAChC,MAwBF,CAAA"}
