@@ -1,0 +1,341 @@
+<h1 class="page-title">Schemas</h1>
+<p class="page-subtitle">
+   Quando você tem um payload com múltiplos campos, validar campo por campo com
+   handlers individuais fica trabalhoso e propenso a esquecer alguma coisa. O
+   sistema de schemas resolve isso — você define o shape do objeto uma vez e
+   chama <code>.parse()</code> ou <code>.safeParse()</code>.
+</p>
+
+<h2 class="section" id="definindo">
+   Definindo um schema <a class="anchor" href="#schema/definindo">#</a>
+</h2>
+
+<p>
+   Importe <code>schema</code> e passe um objeto onde cada chave é um campo e o
+   valor é o tipo (forma curta) ou um objeto de configuração (forma completa).
+   Os tipos podem ser qualquer string registrada no registry — incluindo tipos
+   de plugins.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Definindo um schema — forma curta</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { schema } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> cadastroSchema = schema({
+  name:     <span class="str">'name'</span>,
+  document: <span class="str">'cpf'</span>,
+  phone:    <span class="str">'phone'</span>,
+  email:    <span class="str">'email'</span>,
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="parse">
+   parse() e safeParse() <a class="anchor" href="#schema/parse">#</a>
+</h2>
+
+<p>
+   <code>parse()</code> processa o objeto e retorna todos os campos
+   normalizados, ou lança um <code>SchemaError</code> com o mapa completo de
+   erros se algum campo for inválido. <code>safeParse()</code> faz o mesmo, mas
+   nunca lança — retorna <code>{ success, data, errors }</code>.
+</p>
+
+<div class="callout note">
+   <strong>Todos os erros de uma vez:</strong> o schema não para no primeiro
+   campo inválido. Ele processa todos os campos antes de retornar — assim o
+   usuário vê todos os problemas ao mesmo tempo, não um por um.
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >parse() — lança SchemaError se algum campo falhar</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> dados = cadastroSchema.parse({
+  name:     <span class="str">'JOAO SILVA'</span>,
+  document: <span class="str">'11144477735'</span>,
+  phone:    <span class="str">'11987654321'</span>,
+  email:    <span class="str">'JOAOsilVa95@Email.com'</span>,
+})
+
+<span class="cm">// dados →</span>
+<span class="cm">// {</span>
+<span class="cm">//   name:     'Joao Silva',</span>
+<span class="cm">//   document: '111.444.777-35',</span>
+<span class="cm">//   phone:    '(11) 98765-4321',</span>
+<span class="cm">//   email:    'joaosilva95@email.com'</span>
+<span class="cm">// }</span></pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >safeParse() — nunca lança, retorna o resultado</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> result = cadastroSchema.safeParse(req.body)
+
+<span class="kw">if</span> (!result.success) {
+  <span class="kw">return</span> res.status(<span class="num">400</span>).json({ errors: result.errors })
+  <span class="cm">// result.errors →</span>
+  <span class="cm">// {</span>
+  <span class="cm">//   name:     '[normalize:name] Expected non-empty string...',</span>
+  <span class="cm">//   document: '[normalize:cpf] Invalid CPF...',</span>
+  <span class="cm">// }</span>
+}
+
+<span class="kw">await</span> salvarUsuario(result.data) <span class="cm">// já normalizado, pronto pro banco</span></pre>
+</div>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Propriedade</th>
+         <th>Quando success: true</th>
+         <th>Quando success: false</th>
+      </tr>
+      <tr>
+         <td>success</td>
+         <td><code>true</code></td>
+         <td><code>false</code></td>
+      </tr>
+      <tr>
+         <td>data</td>
+         <td>Objeto com todos os campos normalizados</td>
+         <td><code>null</code></td>
+      </tr>
+      <tr>
+         <td>errors</td>
+         <td><code>null</code></td>
+         <td>Mapa <code>{ campo: mensagem }</code> de todos os erros</td>
+      </tr>
+   </table>
+</div>
+
+<hr />
+
+<h2 class="section" id="campos">
+   Opções de campo <a class="anchor" href="#schema/campos">#</a>
+</h2>
+
+<p>
+   Além da forma curta (só o tipo como string), cada campo aceita um objeto com
+   configurações. As propriedades <code>optional</code>, <code>default</code>,
+   <code>options</code> e <code>label</code> controlam como o campo é tratado
+   durante o parse.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Todas as opções de campo em um schema</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> pedidoSchema = schema({
+  customerName: <span class="str">'name'</span>,
+
+  coupon: {
+    type:     <span class="str">'slug'</span>,
+    optional: <span class="kw">true</span>,     <span class="cm">// null/undefined passam sem erro</span>
+  },
+
+  country: {
+    type:    <span class="str">'slug'</span>,
+    default: <span class="str">'brasil'</span>, <span class="cm">// usado quando o campo vier undefined</span>
+  },
+
+  total: {
+    type:    <span class="str">'number'</span>,
+    options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> },
+  },
+
+  doc: {
+    type:  <span class="str">'cpf'</span>,
+    label: <span class="str">'CPF do cliente'</span>,  <span class="cm">// aparece nas mensagens de erro</span>
+  },
+})</pre>
+</div>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Opção</th>
+         <th>Tipo</th>
+         <th>Descrição</th>
+      </tr>
+      <tr>
+         <td>type</td>
+         <td><code>string</code></td>
+         <td>Tipo registrado no registry (obrigatório na forma completa)</td>
+      </tr>
+      <tr>
+         <td>optional</td>
+         <td><code>boolean</code></td>
+         <td>
+            Se <code>true</code>, <code>null</code> e
+            <code>undefined</code> passam sem erro
+         </td>
+      </tr>
+      <tr>
+         <td>default</td>
+         <td><code>any</code></td>
+         <td>
+            Valor usado quando o campo vier <code>undefined</code>. Diferente de
+            <code>optional</code>: o default é normalizado
+         </td>
+      </tr>
+      <tr>
+         <td>options</td>
+         <td><code>object</code></td>
+         <td>Repassado ao handler como segundo argumento</td>
+      </tr>
+      <tr>
+         <td>label</td>
+         <td><code>string</code></td>
+         <td>
+            Nome legível usado nas mensagens de erro em vez do nome da chave
+         </td>
+      </tr>
+   </table>
+</div>
+
+<hr />
+
+<h2 class="section" id="utils">
+   Utilitários de schema <a class="anchor" href="#schema/utils">#</a>
+</h2>
+
+<p>
+   Todos os métodos de utilitário retornam <strong>novos schemas</strong> — o
+   schema original nunca é modificado. Isso permite derivar múltiplas variações
+   a partir de um schema base sem efeitos colaterais.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >partial · pick · omit · extend — todos imutáveis</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> userSchema = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, document: <span class="str">'cpf'</span> })
+
+<span class="cm">// .partial() — todos os campos viram opcionais</span>
+<span class="kw">const</span> updateSchema = userSchema.partial()
+updateSchema.safeParse({})
+<span class="cm">// → { success: true, data: {}, errors: null }</span>
+
+<span class="cm">// .pick() — novo schema só com os campos especificados</span>
+<span class="kw">const</span> loginSchema = userSchema.pick(<span class="str">'email'</span>, <span class="str">'document'</span>)
+
+<span class="cm">// .omit() — remove um ou mais campos</span>
+<span class="kw">const</span> publicUser = userSchema.omit(<span class="str">'document'</span>)
+
+<span class="cm">// .extend() — adiciona campos (não altera o schema original)</span>
+<span class="kw">const</span> fullSchema = userSchema.extend({ phone: <span class="str">'phone'</span>, cep: <span class="str">'cep'</span> })</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Padrão prático — um schema base, múltiplas operações</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> userSchema = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, document: <span class="str">'cpf'</span>, phone: <span class="str">'phone'</span> })
+
+<span class="kw">const</span> createUser  = userSchema                   <span class="cm">// POST — todos obrigatórios</span>
+<span class="kw">const</span> patchUser   = userSchema.partial()         <span class="cm">// PATCH — todos opcionais</span>
+<span class="kw">const</span> publicUser  = userSchema.omit(<span class="str">'document'</span>) <span class="cm">// GET — sem CPF na resposta</span>
+<span class="kw">const</span> loginSchema = userSchema.pick(<span class="str">'email'</span>)    <span class="cm">// POST /login — só email</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="error">
+   SchemaError <a class="anchor" href="#schema/error">#</a>
+</h2>
+
+<p>
+   Quando <code>.parse()</code> falha, lança uma instância de
+   <code>SchemaError</code> com a propriedade <code>.errors</code> contendo o
+   mapa completo de campos com erro. Você pode verificar com
+   <code>instanceof</code> para distinguir de outros erros.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Capturando e inspecionando um SchemaError</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">try</span> {
+  cadastroSchema.parse({ name: <span class="str">''</span>, document: <span class="str">'invalido'</span>, phone: <span class="str">'123'</span> })
+} <span class="kw">catch</span> (err) {
+  <span class="kw">if</span> (err <span class="kw">instanceof</span> <span class="cls">SchemaError</span>) {
+    console.log(err.errors)
+    <span class="cm">// {</span>
+    <span class="cm">//   name:     '[normalize:name] Expected non-empty string...',</span>
+    <span class="cm">//   document: '[normalize:cpf] Invalid CPF. Received: invalido',</span>
+    <span class="cm">//   phone:    '[normalize:phone] Expected 10 or 11-digit phone number'</span>
+    <span class="cm">// }</span>
+  }
+}</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >SchemaError em um endpoint Express com tratamento adequado</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+app.post(<span class="str">'/usuarios'</span>, (req, res, next) => {
+  <span class="kw">try</span> {
+    <span class="kw">const</span> data = userSchema.parse(req.body)
+    db.users.create(data)
+    res.status(<span class="num">201</span>).json(data)
+  } <span class="kw">catch</span> (err) {
+    <span class="kw">if</span> (err <span class="kw">instanceof</span> <span class="cls">SchemaError</span>) {
+      <span class="kw">return</span> res.status(<span class="num">400</span>).json({ message: <span class="str">'Dados inválidos'</span>, errors: err.errors })
+    }
+    next(err) <span class="cm">// outros erros vão pro handler de erro do Express</span>
+  }
+})</pre>
+</div>
+
+<div class="callout tip">
+   <strong>parse() vs safeParse() em APIs:</strong> para endpoints onde você
+   quer um único bloco de tratamento de erro, <code>parse()</code> com
+   <code>try/catch</code> é mais limpo. Para handlers onde você quer retornar o
+   erro imediatamente sem fluxo alternativo, <code>safeParse()</code> é mais
+   direto. Ambos retornam o mesmo mapa de erros.
+</div>

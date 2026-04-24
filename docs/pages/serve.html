@@ -1,0 +1,1829 @@
+<h1 class="page-title">data-handlers/serve</h1>
+<p class="page-subtitle">
+   Servidor HTTP completo para Node.js puro — roteamento estilo Bun, WebSocket
+   nativo, rate limiting por IP, autenticação integrada, logger colorido e
+   graceful shutdown. Tudo sem instalar mais nada.
+</p>
+
+<div class="callout note">
+   <span class="callout-icon"
+      ><svg
+         width="14"
+         height="14"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="2.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="color: var(--blue); flex-shrink: 0; margin-top: 2px"
+      >
+         <circle cx="12" cy="12" r="10" />
+         <line x1="12" y1="8" x2="12" y2="8" />
+         <line x1="12" y1="12" x2="12" y2="16" /></svg
+   ></span>
+   <span class="callout-body"
+      ><strong>Node.js ≥ 18 obrigatório.</strong> O serve usa Web APIs nativas
+      (<code>Request</code>, <code>Response</code>, <code>URL</code>) que só
+      existem a partir do Node 18. Se você já usa Bun, Express ou Fastify no
+      projeto — não precisa disso.</span
+   >
+</div>
+
+<hr />
+
+<h2 class="section" id="imports">
+   Imports disponíveis <a class="anchor" href="#serve/imports">#</a>
+</h2>
+
+<p>
+   Tudo que o subpath export <code>data-handlers/serve</code> expõe. Você só
+   importa o que vai usar.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Tudo que pode ser importado de data-handlers/serve</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> {
+  serve,           <span class="cm">// função principal — inicia o servidor</span>
+  systemResponses, <span class="cm">// respostas JSON padronizadas por código HTTP</span>
+  requireAuth,     <span class="cm">// middleware pronto: bloqueia requests sem auth com 401</span>
+  safeCompare,     <span class="cm">// comparação de strings em tempo constante (anti timing-attack)</span>
+} <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Tipos TypeScript — só existem em tempo de compilação, não geram código JS</span>
+<span class="kw">import</span> <span class="kw">type</span> {
+  ServeOptions,       <span class="cm">// opções do serve()</span>
+  ListenOptions,      <span class="cm">// opções do .listen()</span>
+  ShutdownOptions,    <span class="cm">// opções do graceful shutdown</span>
+  BunLikeRequest,     <span class="cm">// request com params, user e upgrade()</span>
+  RouteHandler,       <span class="cm">// tipo de um handler de rota</span>
+  Middleware,         <span class="cm">// tipo de um middleware</span>
+  MethodMap,          <span class="cm">// objeto com handlers separados por método HTTP</span>
+  Routes,             <span class="cm">// mapa completo de rotas</span>
+  AuthFunction,       <span class="cm">// tipo da função auth</span>
+  LoggerOptions,      <span class="cm">// configuração do logger</span>
+  LogEntry,           <span class="cm">// estrutura de uma entrada de log</span>
+  LogLevel,           <span class="cm">// 'minimal' | 'standard' | 'verbose'</span>
+  RateLimitOptions,   <span class="cm">// configuração do rate limit</span>
+  WSHandlers,         <span class="cm">// handlers do WebSocket</span>
+  WSContext,          <span class="cm">// contexto de uma conexão WebSocket ativa</span>
+  SystemResponseBody, <span class="cm">// shape JSON das respostas de erro</span>
+} <span class="kw">from</span> <span class="str">'data-handlers/serve'</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="hello-world">
+   Primeiro servidor <a class="anchor" href="#serve/hello-world">#</a>
+</h2>
+
+<p>
+   O mínimo para ter um servidor funcionando é passar um objeto com
+   <code>routes</code>. Tudo o mais é opcional. Veja abaixo três exemplos
+   progressivos — do mais simples ao mais completo.
+</p>
+
+<h3 class="sub">Exemplo 1 — o mínimo absoluto</h3>
+
+<p>
+   Um servidor que responde <code>{ ok: true }</code> em qualquer rota. Útil
+   para testar se a instalação funcionou ou para servir um health check simples.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">server.ts — o mínimo para rodar</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  port: <span class="num">3000</span>,
+  routes: {
+    <span class="str">'/'</span>: () => Response.json({ ok: <span class="kw">true</span> }),
+  }
+})</pre>
+</div>
+
+<p>
+   Pronto. Acesse <code>http://localhost:3000/</code> e vai receber
+   <code>{"ok":true}</code>. Se você não passar <code>port</code>, o padrão é
+   <code>3000</code>.
+</p>
+
+<h3 class="sub">Exemplo 2 — API REST com múltiplas rotas</h3>
+
+<p>
+   Um servidor real com rotas GET e POST, parâmetro dinâmico <code>:id</code>,
+   logger ligado e um banner customizado no terminal quando o servidor iniciar.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">server.ts — API de usuários completa</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="kw">const</span> users = [{ id: <span class="str">'1'</span>, name: <span class="str">'Ana'</span> }, { id: <span class="str">'2'</span>, name: <span class="str">'Carlos'</span> }]
+
+serve({
+  port: <span class="num">3000</span>,
+  logger: <span class="kw">true</span>,  <span class="cm">// loga método, path, status e tempo de cada request</span>
+
+  routes: {
+    <span class="cm">// GET /users → lista todos</span>
+    <span class="str">'/users'</span>: {
+      GET:  () => Response.json(users),
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> body = <span class="kw">await</span> req.json()
+        users.push(body)
+        <span class="kw">return</span> Response.json(body, { status: <span class="num">201</span> })
+      },
+    },
+
+    <span class="cm">// GET /users/1 → busca por id no req.params</span>
+    <span class="str">'/users/:id'</span>: {
+      GET: (req) => {
+        <span class="kw">const</span> user = users.find(u => u.id === req.params.id)
+        <span class="kw">return</span> user
+          ? Response.json(user)
+          : Response.json({ error: <span class="str">'not found'</span> }, { status: <span class="num">404</span> })
+      },
+    },
+  },
+}).listen({
+  banner: (url) => console.log(<span class="str">`🚀 rodando em ${url}`</span>),
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 3 — servidor de produção completo</h3>
+
+<p>
+   Auth via JWT, rate limit, middleware global de CORS, rotas protegidas,
+   WebSocket e graceful shutdown. Esse é o padrão para um servidor pronto para
+   produção.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">server.ts — configuração de produção</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  port: <span class="num">3000</span>,
+  logger: { level: <span class="str">'standard'</span>, ignore: [<span class="str">'/health'</span>] },
+
+  <span class="cm">// auth roda em toda request — resultado vai para req.user</span>
+  auth: <span class="kw">async</span> (req) => {
+    <span class="kw">const</span> token = req.headers.get(<span class="str">'authorization'</span>)?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+    <span class="kw">if</span> (!token) <span class="kw">return null</span>
+    <span class="kw">try</span> { <span class="kw">return await</span> verifyJwt(token) } <span class="kw">catch</span> { <span class="kw">return null</span> }
+  },
+
+  <span class="cm">// rate limit por IP — 100 requests por minuto</span>
+  rateLimit: { windowMs: <span class="num">60_000</span>, max: <span class="num">100</span> },
+
+  routes: {
+    <span class="str">'/health'</span>: () => Response.json({ status: <span class="str">'ok'</span> }),
+
+    <span class="cm">// rota pública — qualquer um acessa</span>
+    <span class="str">'/users'</span>: {
+      GET: () => Response.json(db.users.list()),
+    },
+
+    <span class="cm">// rota protegida — requireAuth bloqueia com 401 se não autenticado</span>
+    <span class="str">'/me'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => Response.json(req.user),
+    },
+
+    <span class="cm">// WebSocket — upgrade acontece no handler GET</span>
+    <span class="str">'/ws'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => req.upgrade({ user: req.user }),
+    },
+  },
+
+  websocket: {
+    open:    (ws) => ws.send(<span class="str">`bem-vindo, ${ws.data.user.name}`</span>),
+    message: (ws, data) => ws.send(<span class="str">`eco: ${data}`</span>),
+    close:   (ws, code) => console.log(<span class="str">'desconectou'</span>, code),
+  },
+
+  shutdown: {
+    timeout: <span class="num">10_000</span>,
+    onShutdown: <span class="kw">async</span> () => {
+      <span class="kw">await</span> db.close()
+      console.log(<span class="str">'banco fechado'</span>)
+    },
+  },
+
+  error: (err) => Response.json({ error: String(err) }, { status: <span class="num">500</span> }),
+  fetch: (req) => systemResponses[<span class="num">404</span>](req),
+
+}).listen({
+  banner: (url) => console.log(<span class="str">`🚀 ${url}`</span>),
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="options">
+   ServeOptions — referência completa
+   <a class="anchor" href="#serve/options">#</a>
+</h2>
+
+<p>
+   Todas as opções passadas para <code>serve()</code>. Nenhuma é obrigatória —
+   você começa com o que precisa e adiciona o resto conforme a aplicação cresce.
+</p>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Opção</th>
+         <th>Tipo</th>
+         <th>Default</th>
+         <th>Descrição</th>
+      </tr>
+      <tr>
+         <td><code>port</code></td>
+         <td><code>number</code></td>
+         <td><code>3000</code></td>
+         <td>Porta em que o servidor vai escutar</td>
+      </tr>
+      <tr>
+         <td><code>host</code></td>
+         <td><code>string</code></td>
+         <td><code>'0.0.0.0'</code></td>
+         <td>
+            Interface de rede. Use <code>'127.0.0.1'</code> para expor só
+            localmente
+         </td>
+      </tr>
+      <tr>
+         <td><code>routes</code></td>
+         <td><code>Routes</code></td>
+         <td><code>{}</code></td>
+         <td>
+            Mapa de paths para handlers. Chave é o path, valor é um handler ou
+            MethodMap
+         </td>
+      </tr>
+      <tr>
+         <td><code>middleware</code></td>
+         <td><code>Middleware[]</code></td>
+         <td><code>[]</code></td>
+         <td>
+            Middlewares globais — rodam em toda request, em ordem, antes de
+            qualquer handler de rota
+         </td>
+      </tr>
+      <tr>
+         <td><code>fetch</code></td>
+         <td><code>RouteHandler</code></td>
+         <td>—</td>
+         <td>
+            Fallback quando nenhuma rota casa. Se omitido, usa
+            <code>systemResponses[404]</code> automaticamente
+         </td>
+      </tr>
+      <tr>
+         <td><code>error</code></td>
+         <td><code>(err) => Response</code></td>
+         <td>—</td>
+         <td>
+            Handler global para exceções não tratadas nos handlers. Se omitido,
+            usa <code>systemResponses[500]</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>auth</code></td>
+         <td><code>AuthFunction&lt;TUser&gt;</code></td>
+         <td>—</td>
+         <td>
+            Roda antes de todo middleware. Resultado injetado em
+            <code>req.user</code> — nunca <code>undefined</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>rateLimit</code></td>
+         <td><code>RateLimitOptions</code></td>
+         <td>—</td>
+         <td>
+            Rate limit por IP com sliding window. Headers automáticos em todas
+            as respostas
+         </td>
+      </tr>
+      <tr>
+         <td><code>logger</code></td>
+         <td><code>boolean | LoggerOptions</code></td>
+         <td>—</td>
+         <td>
+            <code>true</code> usa nível <code>'standard'</code>. Objeto permite
+            configuração completa
+         </td>
+      </tr>
+      <tr>
+         <td><code>websocket</code></td>
+         <td><code>WSHandlers</code></td>
+         <td>—</td>
+         <td>
+            Handlers de WebSocket na mesma porta do HTTP. Upgrade feito via
+            <code>req.upgrade()</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>shutdown</code></td>
+         <td><code>ShutdownOptions</code></td>
+         <td>—</td>
+         <td>
+            Configura graceful shutdown automático no <code>SIGINT</code>/<code
+               >SIGTERM</code
+            >
+         </td>
+      </tr>
+   </table>
+</div>
+
+<hr />
+
+<h2 class="section" id="routes">
+   Rotas <a class="anchor" href="#serve/routes">#</a>
+</h2>
+
+<p>
+   Cada chave do objeto <code>routes</code> é um path. O valor pode ser um
+   handler direto — que responde a qualquer método HTTP — ou um
+   <strong>MethodMap</strong>: um objeto onde cada chave é um método HTTP
+   (<code>GET</code>, <code>POST</code>, etc.) com seu próprio handler.
+</p>
+
+<p>
+   Rotas estáticas têm prioridade automática sobre dinâmicas quando os paths são
+   ambíguos. Por exemplo,
+   <code>'/users/me'</code> sempre vai ser preferida em relação a
+   <code>'/users/:id'</code> quando o path for exatamente
+   <code>/users/me</code>.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Todos os formatos de rota suportados</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>serve({
+  routes: {
+    <span class="cm">// Handler direto — responde independente do método HTTP</span>
+    <span class="str">'/'</span>: (req) => Response.json({ method: req.method }),
+
+    <span class="cm">// MethodMap — métodos HTTP separados na mesma rota</span>
+    <span class="str">'/users'</span>: {
+      GET:    () => Response.json(users),
+      POST:   <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> body = <span class="kw">await</span> req.json()
+        <span class="cm">/* ... */</span>
+      },
+      PUT:    (req) => <span class="cm">/* ... */</span>,
+      PATCH:  (req) => <span class="cm">/* ... */</span>,
+      DELETE: (req) => <span class="cm">/* ... */</span>,
+    },
+
+    <span class="cm">// Parâmetro dinâmico — req.params.id é a parte variável do path</span>
+    <span class="str">'/users/:id'</span>: {
+      GET:    (req) => Response.json({ id: req.params.id }),
+      DELETE: (req) => <span class="cm">/* ... */</span>,
+    },
+
+    <span class="cm">// Múltiplos parâmetros — todos disponíveis em req.params</span>
+    <span class="str">'/users/:userId/posts/:postId'</span>: {
+      GET: (req) => Response.json(req.params),
+      <span class="cm">// req.params → { userId: '42', postId: '7' }</span>
+    },
+
+    <span class="cm">// Wildcard — captura qualquer sub-path abaixo de /static/</span>
+    <span class="str">'/static/*'</span>: (req) => Response.json({ path: req.url }),
+  },
+
+  <span class="cm">// Fallback — roda quando nenhuma rota casou</span>
+  fetch: (req) => Response.json({ error: <span class="str">'not found'</span> }, { status: <span class="num">404</span> }),
+})</pre>
+</div>
+
+<h3 class="sub">O objeto req — o que está disponível</h3>
+
+<p>
+   O <code>req</code> nos handlers é uma <code>Request</code> da Web API padrão,
+   com três propriedades extras adicionadas pelo serve: <code>params</code>,
+   <code>user</code> e o método <code>upgrade()</code>.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >BunLikeRequest — tudo que você pode usar no handler</span
+         >
+         <span class="card-tag amber">TypeScript</span>
+      </div>
+   </div>
+   <pre><span class="kw">import</span> <span class="kw">type</span> { <span class="cls">RouteHandler</span> } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="kw">const</span> handler: <span class="cls">RouteHandler</span> = <span class="kw">async</span> (req) => {
+  <span class="cm">// Extras do serve</span>
+  req.params          <span class="cm">// { id: string } — parâmetros dinâmicos da rota</span>
+  req.user            <span class="cm">// TUser | null — resultado da função auth</span>
+  req.upgrade(data)   <span class="cm">// faz upgrade para WebSocket; data vai para ws.data</span>
+
+  <span class="cm">// Web APIs padrão — funcionam igual ao browser/Bun</span>
+  <span class="kw">const</span> body    = <span class="kw">await</span> req.json()           <span class="cm">// JSON → objeto</span>
+  <span class="kw">const</span> texto   = <span class="kw">await</span> req.text()           <span class="cm">// string pura</span>
+  <span class="kw">const</span> form    = <span class="kw">await</span> req.formData()       <span class="cm">// FormData (multipart)</span>
+  <span class="kw">const</span> binario = <span class="kw">await</span> req.arrayBuffer()    <span class="cm">// binário</span>
+
+  <span class="cm">// Leitura de headers e query string</span>
+  <span class="kw">const</span> auth = req.headers.get(<span class="str">'authorization'</span>)
+  <span class="kw">const</span> page = <span class="kw">new</span> <span class="cls">URL</span>(req.url).searchParams.get(<span class="str">'page'</span>)
+
+  <span class="kw">return</span> Response.json({ ok: <span class="kw">true</span> })
+}</pre>
+</div>
+
+<div class="callout warn">
+   <strong>Limite de payload:</strong> o body é limitado a
+   <strong>1 MB</strong> por padrão. Payloads maiores encerram a conexão com
+   erro — o handler <code>error</code> captura e pode retornar um 400 ou 413
+   customizado.
+</div>
+
+<p>
+   Quando uma rota existe mas o método HTTP solicitado não está definido no
+   MethodMap, o servidor responde automaticamente com
+   <code>405 Method Not Allowed</code>. Quando nenhuma rota casa, cai no
+   <code>fetch</code> customizado ou no <code>systemResponses[404]</code>.
+</p>
+
+<hr />
+
+<h2 class="section" id="middleware">
+   Middleware <a class="anchor" href="#serve/middleware">#</a>
+</h2>
+
+<p>
+   Middlewares são funções que rodam antes do handler de rota. O contrato é
+   simples: retornar
+   <code>null</code> passa para o próximo middleware (ou para o handler).
+   Retornar uma <code>Response</code> interrompe a chain e responde
+   imediatamente — o handler nunca chega a rodar.
+</p>
+
+<p>
+   A execução é sempre serial e na ordem declarada — nunca paralela. Middlewares
+   globais rodam primeiro, depois os middlewares da rota específica, depois o
+   handler.
+</p>
+
+<h3 class="sub">Contrato de tipo</h3>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Interface Middleware</span>
+         <span class="card-tag amber">TypeScript</span>
+      </div>
+   </div>
+   <pre><span class="kw">type</span> <span class="cls">Middleware</span>&lt;TUser&gt; = (
+  req: <span class="cls">BunLikeRequest</span>&lt;TUser&gt;
+) => <span class="cls">Response</span> | <span class="kw">null</span> | <span class="cls">Promise</span>&lt;<span class="cls">Response</span> | <span class="kw">null</span>&gt;
+
+<span class="cm">// null     → continua para o próximo middleware ou handler</span>
+<span class="cm">// Response → interrompe aqui e responde; nada mais roda</span></pre>
+</div>
+
+<h3 class="sub">Exemplo 1 — middleware global de CORS</h3>
+
+<p>
+   Um middleware que adiciona os headers de CORS em toda response. Nunca
+   bloqueia — sempre retorna
+   <code>null</code>. Este é o padrão para middlewares que só observam ou
+   modificam headers.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Middleware global — CORS em todas as rotas</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+<span class="kw">import</span> <span class="kw">type</span> { <span class="cls">Middleware</span> } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="kw">const</span> cors: <span class="cls">Middleware</span> = (req) => {
+  <span class="cm">// Preflight — OPTIONS retorna imediatamente os headers CORS</span>
+  <span class="kw">if</span> (req.method === <span class="str">'OPTIONS'</span>) {
+    <span class="kw">return new</span> <span class="cls">Response</span>(<span class="kw">null</span>, {
+      status: <span class="num">204</span>,
+      headers: {
+        <span class="str">'Access-Control-Allow-Origin'</span>:  <span class="str">'*'</span>,
+        <span class="str">'Access-Control-Allow-Methods'</span>: <span class="str">'GET, POST, PUT, PATCH, DELETE'</span>,
+        <span class="str">'Access-Control-Allow-Headers'</span>: <span class="str">'Content-Type, Authorization'</span>,
+      },
+    })
+  }
+  <span class="kw">return null</span>  <span class="cm">// outros métodos → continua normalmente</span>
+}
+
+serve({
+  middleware: [cors],  <span class="cm">// global — roda antes de toda rota</span>
+  routes: {
+    <span class="str">'/api/users'</span>: { GET: () => Response.json([]) },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 2 — middleware de rota para verificar role</h3>
+
+<p>
+   Um middleware que bloqueia usuários sem a role correta. Só é aplicado na rota
+   onde for declarado — rotas públicas não são afetadas.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Middleware por rota — bloqueio por role de usuário</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// requireAuth → bloqueia com 401 se req.user for null</span>
+<span class="cm">// onlyAdmin  → bloqueia com 403 se o usuário não for admin</span>
+<span class="kw">function</span> onlyAdmin(req) {
+  <span class="kw">if</span> (req.user?.role !== <span class="str">'admin'</span>)
+    <span class="kw">return</span> systemResponses[<span class="num">403</span>](req, <span class="str">'Requer role admin'</span>)
+  <span class="kw">return null</span>
+}
+
+serve({
+  auth: <span class="kw">async</span> (req) => verifyToken(req.headers.get(<span class="str">'authorization'</span>)),
+
+  routes: {
+    <span class="cm">// pública — qualquer um acessa</span>
+    <span class="str">'/produtos'</span>: {
+      GET: () => Response.json(db.produtos.list()),
+    },
+
+    <span class="cm">// protegida — só usuário autenticado</span>
+    <span class="str">'/minha-conta'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => Response.json(req.user),
+    },
+
+    <span class="cm">// restrita — autenticado + admin. Cadeia: requireAuth → onlyAdmin → handler</span>
+    <span class="str">'/admin/usuarios'</span>: {
+      middleware: [requireAuth, onlyAdmin],
+      GET:    () => Response.json(db.users.list()),
+      DELETE: (req) => Response.json(db.users.delete(req.params.id)),
+    },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 3 — middleware de API key para webhooks</h3>
+
+<p>
+   Padrão comum para proteger endpoints de webhook que recebem callbacks
+   externos (Stripe, GitHub, etc.). A API key fica no header, verificada em
+   tempo constante com <code>safeCompare</code> para evitar timing attacks.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Middleware — verificação de API key em tempo constante</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, safeCompare, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// safeCompare evita timing attacks — nunca use === para comparar tokens</span>
+<span class="kw">function</span> apiKey(req) {
+  <span class="kw">const</span> key = req.headers.get(<span class="str">'x-api-key'</span>) ?? <span class="str">''</span>
+  <span class="kw">if</span> (!safeCompare(key, process.env.WEBHOOK_SECRET))
+    <span class="kw">return</span> systemResponses[<span class="num">401</span>](req, <span class="str">'API key inválida'</span>)
+  <span class="kw">return null</span>
+}
+
+serve({
+  routes: {
+    <span class="str">'/webhooks/stripe'</span>: {
+      middleware: [apiKey],
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> event = <span class="kw">await</span> req.json()
+        <span class="cm">// processa evento do Stripe com segurança</span>
+        <span class="kw">return</span> Response.json({ received: <span class="kw">true</span> })
+      },
+    },
+  },
+})</pre>
+</div>
+
+<div class="callout note">
+   <span class="callout-icon"
+      ><svg
+         width="14"
+         height="14"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="2.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="color: var(--blue); flex-shrink: 0; margin-top: 2px"
+      >
+         <circle cx="12" cy="12" r="10" />
+         <line x1="12" y1="8" x2="12" y2="8" />
+         <line x1="12" y1="12" x2="12" y2="16" /></svg
+   ></span>
+   <span class="callout-body"
+      ><strong>Ordem de execução:</strong>
+      <code>[middlewares globais] → [middlewares de rota] → handler</code>. Se
+      qualquer middleware retornar uma <code>Response</code>, os seguintes são
+      ignorados e o handler nunca roda.</span
+   >
+</div>
+
+<h3 class="sub">requireAuth — middleware pronto para uso</h3>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">requireAuth — equivalente interno</span>
+      </div>
+   </div>
+   <pre><span class="cm">// O que requireAuth faz internamente — exatamente isso:</span>
+<span class="kw">function</span> requireAuth(req) {
+  <span class="kw">if</span> (!req.user) <span class="kw">return</span> systemResponses[<span class="num">401</span>](req)
+  <span class="kw">return null</span>
+}
+
+<span class="cm">// Uso simples — adiciona na array middleware da rota</span>
+<span class="str">'/perfil'</span>: {
+  middleware: [requireAuth],
+  GET: (req) => Response.json(req.user),  <span class="cm">// req.user nunca é null aqui</span>
+}</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="auth">
+   Auth embutido <a class="anchor" href="#serve/auth">#</a>
+</h2>
+
+<p>
+   O serve não impõe um mecanismo de autenticação — você define a lógica, ele
+   cuida da integração. A função <code>auth</code> é chamada antes de qualquer
+   middleware em toda request. O resultado é injetado em <code>req.user</code> e
+   fica disponível em todos os middlewares e handlers.
+</p>
+
+<p>
+   <code>req.user</code> está sempre presente — nunca <code>undefined</code>.
+   Quando <code>auth</code> retorna <code>null</code>, o usuário não está
+   autenticado e <code>req.user</code> é <code>null</code>. Cabe ao middleware
+   ou handler decidir o que fazer com isso.
+</p>
+
+<h3 class="sub">Exemplo 1 — JWT com TypeScript genérico</h3>
+
+<p>
+   Passe o tipo do usuário como parâmetro genérico no
+   <code>serve&lt;TUser&gt;()</code> e o TypeScript vai inferir
+   <code>req.user</code> como <code>TUser | null</code> em todos os handlers —
+   sem nenhum cast manual.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Auth com JWT e tipagem completa</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="kw">interface</span> <span class="cls">User</span> {
+  id:   <span class="kw">string</span>
+  name: <span class="kw">string</span>
+  role: <span class="str">'admin'</span> | <span class="str">'user'</span>
+}
+
+serve&lt;<span class="cls">User</span>&gt;({
+  auth: <span class="kw">async</span> (req): <span class="cls">Promise</span>&lt;<span class="cls">User</span> | <span class="kw">null</span>&gt; => {
+    <span class="kw">const</span> token = req.headers.get(<span class="str">'authorization'</span>)?.replace(<span class="str">'Bearer '</span>, <span class="str">''</span>)
+    <span class="kw">if</span> (!token) <span class="kw">return null</span>
+    <span class="kw">try</span> {
+      <span class="kw">return await</span> verifyJwt&lt;<span class="cls">User</span>&gt;(token)  <span class="cm">// retorna User ou lança</span>
+    } <span class="kw">catch</span> {
+      <span class="kw">return null</span>  <span class="cm">// token expirado, malformado, etc.</span>
+    }
+  },
+
+  routes: {
+    <span class="str">'/me'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => {
+        <span class="cm">// req.user é User (não null) — requireAuth já garantiu</span>
+        <span class="kw">return</span> Response.json({ id: req.user!.id, role: req.user!.role })
+      },
+    },
+
+    <span class="str">'/dados-sensiveis'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => {
+        <span class="kw">if</span> (req.user!.role !== <span class="str">'admin'</span>)
+          <span class="kw">return</span> Response.json({ error: <span class="str">'acesso negado'</span> }, { status: <span class="num">403</span> })
+        <span class="kw">return</span> Response.json(db.secret.get())
+      },
+    },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 2 — API key simples (sem JWT)</h3>
+
+<p>
+   Para APIs internas ou scripts, JWT pode ser excessivo. Basta verificar um
+   header customizado e retornar um objeto estático como "usuário".
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Auth por API key — sem JWT</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth, safeCompare } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  auth: <span class="kw">async</span> (req) => {
+    <span class="kw">const</span> key = req.headers.get(<span class="str">'x-api-key'</span>) ?? <span class="str">''</span>
+    <span class="cm">// safeCompare evita timing attacks na comparação</span>
+    <span class="kw">if</span> (!safeCompare(key, process.env.API_KEY)) <span class="kw">return null</span>
+    <span class="kw">return</span> { id: <span class="str">'service'</span>, role: <span class="str">'admin'</span> }  <span class="cm">// usuário fixo</span>
+  },
+  routes: {
+    <span class="str">'/api/dados'</span>: {
+      middleware: [requireAuth],  <span class="cm">// bloqueia sem a key</span>
+      GET: () => Response.json(db.tudo()),
+    },
+  },
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="ratelimit">
+   Rate limit <a class="anchor" href="#serve/ratelimit">#</a>
+</h2>
+
+<p>
+   Rate limit por IP usando algoritmo de <strong>sliding window</strong> — imune
+   a burst attacks na borda da janela, diferente do algoritmo de fixed window
+   que permite o dobro de requests em dois momentos consecutivos exatamente no
+   limite da janela.
+</p>
+
+<p>
+   Estado armazenado em memória — é resetado ao reiniciar o processo. Em
+   ambientes com múltiplas instâncias do servidor, use um store externo como
+   Redis para compartilhar o estado entre processos.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Configuração completa do rate limit</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>serve({
+  rateLimit: {
+    windowMs:   <span class="num">60_000</span>,                                     <span class="cm">// janela de 1 minuto em ms</span>
+    max:        <span class="num">100</span>,                                        <span class="cm">// máximo de requests por IP</span>
+    message:    <span class="str">'Limite atingido. Tente novamente em breve.'</span>, <span class="cm">// mensagem no 429</span>
+    trustProxy: <span class="kw">false</span>,                                      <span class="cm">// padrão — usa socket.remoteAddress</span>
+  },
+})</pre>
+</div>
+
+<p>
+   O servidor adiciona automaticamente os headers de rate limit em
+   <strong>todas</strong> as respostas, não apenas no 429 — permitindo que o
+   cliente monitore o consumo restante a cada request.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Headers adicionados em todas as respostas</span
+         >
+      </div>
+   </div>
+   <pre>X-RateLimit-Limit:     <span class="num">100</span>     <span class="cm">// max configurado</span>
+X-RateLimit-Remaining: <span class="num">73</span>      <span class="cm">// requests restantes na janela atual</span>
+X-RateLimit-Reset:     <span class="num">1774…</span>   <span class="cm">// timestamp Unix do próximo reset</span>
+Retry-After:           <span class="num">42</span>      <span class="cm">// só no 429 — segundos até poder tentar de novo</span></pre>
+</div>
+
+<h3 class="sub">Exemplo — rate limits diferentes por rota</h3>
+
+<p>
+   O rate limit global protege todo o servidor. Se precisar de limites
+   diferentes por contexto, combine um middleware customizado por rota com a
+   opção global mais permissiva.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Rate limit mais restritivo no endpoint de login</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Contador simples em memória para o endpoint de login</span>
+<span class="kw">const</span> loginAttempts = <span class="kw">new</span> <span class="cls">Map</span>&lt;<span class="kw">string</span>, { count: <span class="kw">number</span>; reset: <span class="kw">number</span> }&gt;()
+
+<span class="kw">function</span> loginRateLimit(req) {
+  <span class="kw">const</span> ip  = req.headers.get(<span class="str">'x-forwarded-for'</span>) ?? <span class="str">'unknown'</span>
+  <span class="kw">const</span> now = Date.now()
+  <span class="kw">const</span> entry = loginAttempts.get(ip)
+
+  <span class="kw">if</span> (!entry || entry.reset &lt; now) {
+    loginAttempts.set(ip, { count: <span class="num">1</span>, reset: now + <span class="num">900_000</span> })  <span class="cm">// janela de 15min</span>
+    <span class="kw">return null</span>
+  }
+
+  <span class="kw">if</span> (entry.count &gt;= <span class="num">5</span>) {
+    <span class="kw">return</span> systemResponses[<span class="num">429</span>](req, <span class="str">'Muitas tentativas. Aguarde 15 minutos.'</span>)
+  }
+
+  entry.count++
+  <span class="kw">return null</span>
+}
+
+serve({
+  rateLimit: { windowMs: <span class="num">60_000</span>, max: <span class="num">200</span> },  <span class="cm">// global — permissivo</span>
+
+  routes: {
+    <span class="str">'/auth/login'</span>: {
+      middleware: [loginRateLimit],  <span class="cm">// restritivo — 5 tentativas por 15min</span>
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> { email, password } = <span class="kw">await</span> req.json()
+        <span class="cm">/* lógica de login */</span>
+      },
+    },
+  },
+})</pre>
+</div>
+
+<div class="callout warn">
+   <strong>trustProxy: true</strong> usa o header
+   <code>X-Forwarded-For</code> para extrair o IP real do cliente. Esse header é
+   manipulável — qualquer cliente pode enviar um valor arbitrário. Só ative se
+   você confia completamente no proxy ou load balancer na frente do servidor.
+</div>
+
+<hr />
+
+<h2 class="section" id="logger">
+   Logger <a class="anchor" href="#serve/logger">#</a>
+</h2>
+
+<p>
+   Logger colorido com três níveis de detalhe. Roda após cada resposta — nunca
+   bloqueia a request. Pode ser substituído completamente por um logger
+   customizado via <code>onLog</code>.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Todos os modos de configurar o logger</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>serve({
+  <span class="cm">// Modo simples — habilita com nível 'standard'</span>
+  logger: <span class="kw">true</span>,
+
+  <span class="cm">// Ou objeto completo com todas as opções</span>
+  logger: {
+    level:  <span class="str">'verbose'</span>,           <span class="cm">// 'minimal' | 'standard' | 'verbose'</span>
+    prefix: <span class="str">'api'</span>,              <span class="cm">// prefixo em cada linha: [api]</span>
+    ignore: [<span class="str">'/health'</span>, <span class="str">'/metrics'</span>, <span class="str">/\/ping/</span>],  <span class="cm">// rotas silenciadas (string ou regex)</span>
+
+    <span class="cm">// onLog substitui o logger padrão completamente</span>
+    onLog: (entry) => {
+      myMonitoring.track({
+        method:   entry.method,
+        path:     entry.pathname,
+        status:   entry.status,
+        duration: entry.durationMs,
+        ip:       entry.ip,
+      })
+    },
+  },
+})</pre>
+</div>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Nível</th>
+         <th>O que é registrado</th>
+      </tr>
+      <tr>
+         <td><code>minimal</code></td>
+         <td>Método, path, status e duração em ms</td>
+      </tr>
+      <tr>
+         <td><code>standard</code></td>
+         <td>
+            + headers da request relevantes (<code>content-type</code>,
+            <code>authorization</code>, <code>user-agent</code>…)
+         </td>
+      </tr>
+      <tr>
+         <td><code>verbose</code></td>
+         <td>+ body da response (se for JSON)</td>
+      </tr>
+   </table>
+</div>
+
+<h3 class="sub">Exemplo — integração com Datadog / Sentry</h3>
+
+<p>
+   Use <code>onLog</code> para enviar métricas para qualquer sistema de
+   monitoramento. O campo <code>status</code> permite filtrar apenas os erros e
+   o <code>durationMs</code> serve para detectar rotas lentas.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >onLog — enviando métricas para monitoramento</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>serve({
+  logger: {
+    level: <span class="str">'standard'</span>,
+    ignore: [<span class="str">'/health'</span>, <span class="str">'/favicon.ico'</span>],
+
+    onLog: (entry) => {
+      <span class="cm">// Sempre loga no console (substitua pelo seu logger favorito)</span>
+      console.log(<span class="str">`${entry.method} ${entry.pathname} → ${entry.status} (${entry.durationMs}ms)`</span>)
+
+      <span class="cm">// Erros 5xx → rastreia no Sentry</span>
+      <span class="kw">if</span> (entry.status &gt;= <span class="num">500</span>) {
+        Sentry.captureMessage(<span class="str">`${entry.method} ${entry.pathname} → ${entry.status}`</span>)
+      }
+
+      <span class="cm">// Toda request → métricas no Datadog</span>
+      datadog.increment(<span class="str">'http.requests'</span>, <span class="num">1</span>, [
+        <span class="str">`method:${entry.method}`</span>,
+        <span class="str">`path:${entry.pathname}`</span>,
+        <span class="str">`status:${entry.status}`</span>,
+      ])
+      datadog.histogram(<span class="str">'http.duration_ms'</span>, entry.durationMs)
+    },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">LogEntry — todos os campos disponíveis no onLog</h3>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Tipo LogEntry</span>
+         <span class="card-tag amber">TypeScript</span>
+      </div>
+   </div>
+   <pre><span class="kw">type</span> <span class="cls">LogEntry</span> = {
+  method:          <span class="kw">string</span>                          <span class="cm">// 'GET', 'POST'…</span>
+  pathname:        <span class="kw">string</span>                          <span class="cm">// '/api/users'</span>
+  status:          <span class="kw">number</span>                          <span class="cm">// 200, 404…</span>
+  durationMs:      <span class="kw">number</span>                          <span class="cm">// tempo de processamento em ms</span>
+  requestHeaders:  <span class="cls">Record</span>&lt;<span class="kw">string</span>, <span class="kw">string</span>&gt;          <span class="cm">// todos os headers da request</span>
+  responseBody:    <span class="kw">string</span> | <span class="kw">null</span>                  <span class="cm">// body da response (só no verbose)</span>
+  timestamp:       <span class="kw">string</span>                          <span class="cm">// ISO 8601 — quando a request chegou</span>
+  ip:              <span class="kw">string</span>                          <span class="cm">// IP do cliente</span>
+}</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="websocket">
+   WebSocket <a class="anchor" href="#serve/websocket">#</a>
+</h2>
+
+<p>
+   WebSocket nativo sem libs externas, na mesma porta do servidor HTTP. O
+   upgrade é feito via
+   <code>req.upgrade(data)</code> dentro de um handler GET — o objeto
+   <code>data</code> que você passar fica disponível como
+   <code>ws.data</code> em todos os handlers de WebSocket. Use isso para passar
+   informações do contexto da request (usuário autenticado, sala, etc.).
+</p>
+
+<h3 class="sub">Exemplo 1 — echo server simples</h3>
+
+<p>
+   O mais básico: aceita qualquer conexão e devolve tudo que receber. Ótimo para
+   entender o fluxo antes de adicionar autenticação.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Echo server — WebSocket mínimo</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  routes: {
+    <span class="cm">// req.upgrade() faz o handshake WebSocket</span>
+    <span class="cm">// {} é o dado inicial — disponível em ws.data</span>
+    <span class="str">'/ws'</span>: { GET: (req) => req.upgrade({}) },
+  },
+
+  websocket: {
+    open:    (ws)       => ws.send(<span class="str">'conectado!'</span>),
+    message: (ws, data) => ws.send(<span class="str">`eco: ${data}`</span>),
+    close:   (ws, code) => console.log(<span class="str">'desconectou, código:'</span>, code),
+    error:   (ws, err)  => console.error(<span class="str">'erro WS:'</span>, err),
+  },
+}).listen({ banner: (url) => console.log(<span class="str">`WS disponível em ${url}/ws`</span>) })</pre>
+</div>
+
+<h3 class="sub">Exemplo 2 — chat com autenticação e salas</h3>
+
+<p>
+   Padrão mais realista: autentica o usuário antes do upgrade, passa o contexto
+   para
+   <code>ws.data</code> e usa isso nos handlers de mensagem para saber quem está
+   falando.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >WebSocket com auth — usuário disponível nos handlers</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Rastreia as conexões ativas por sala</span>
+<span class="kw">const</span> salas = <span class="kw">new</span> <span class="cls">Map</span>&lt;<span class="kw">string</span>, <span class="cls">Set</span>&lt;any&gt;&gt;()
+
+serve({
+  auth: <span class="kw">async</span> (req) => verifyToken(req.headers.get(<span class="str">'authorization'</span>)),
+
+  routes: {
+    <span class="str">'/ws/chat'</span>: {
+      middleware: [requireAuth],  <span class="cm">// bloqueia com 401 se não autenticado</span>
+
+      GET: (req) => {
+        <span class="kw">const</span> sala = <span class="kw">new</span> <span class="cls">URL</span>(req.url).searchParams.get(<span class="str">'sala'</span>) ?? <span class="str">'geral'</span>
+        <span class="cm">// tudo passado aqui fica em ws.data nos handlers abaixo</span>
+        <span class="kw">return</span> req.upgrade({ user: req.user, sala })
+      },
+    },
+  },
+
+  websocket: {
+    allowedOrigins: [<span class="str">'https://meusite.com'</span>],  <span class="cm">// rejeita conexões de outras origens</span>
+    maxPayload:     <span class="num">32</span> * <span class="num">1024</span>,               <span class="cm">// mensagens maiores que 32KB fecham a conexão</span>
+    heartbeat:      <span class="num">30_000</span>,                  <span class="cm">// ping/pong automático a cada 30s</span>
+
+    open: (ws) => {
+      <span class="kw">const</span> { user, sala } = ws.data
+      <span class="kw">if</span> (!salas.has(sala)) salas.set(sala, <span class="kw">new</span> <span class="cls">Set</span>())
+      salas.get(sala)!.add(ws)
+      ws.send(<span class="str">`Bem-vindo à sala "${sala}", ${user.name}!`</span>)
+    },
+
+    message: (ws, data) => {
+      <span class="kw">const</span> { user, sala } = ws.data
+      <span class="kw">const</span> msg = <span class="str">`[${user.name}] ${data}`</span>
+      <span class="cm">// broadcast para todos na mesma sala</span>
+      salas.get(sala)?.forEach(conn => conn.send(msg))
+    },
+
+    close: (ws) => {
+      <span class="kw">const</span> { sala } = ws.data
+      salas.get(sala)?.delete(ws)
+    },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 3 — notificações server-sent sem polling</h3>
+
+<p>
+   Use WebSocket para empurrar notificações em tempo real para o cliente — sem
+   ele precisar ficar consultando a API. O servidor envia quando algo acontece
+   no banco ou em outro processo.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">WebSocket — notificações server-push</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Guarda todas as conexões ativas por userId</span>
+<span class="kw">const</span> conexoes = <span class="kw">new</span> <span class="cls">Map</span>&lt;<span class="kw">string</span>, any&gt;()
+
+serve({
+  auth: <span class="kw">async</span> (req) => verifyToken(req.headers.get(<span class="str">'authorization'</span>)),
+
+  routes: {
+    <span class="str">'/ws/notificacoes'</span>: {
+      middleware: [requireAuth],
+      GET: (req) => req.upgrade({ userId: req.user!.id }),
+    },
+
+    <span class="cm">// Endpoint interno para disparar notificação (ex: chamado por job ou evento)</span>
+    <span class="str">'/internal/notify/:userId'</span>: {
+      POST: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> ws = conexoes.get(req.params.userId)
+        <span class="kw">const</span> payload = <span class="kw">await</span> req.json()
+
+        <span class="kw">if</span> (ws) {
+          ws.send(<span class="cls">JSON</span>.stringify(payload))
+          <span class="kw">return</span> Response.json({ entregue: <span class="kw">true</span> })
+        }
+        <span class="kw">return</span> Response.json({ entregue: <span class="kw">false</span>, motivo: <span class="str">'usuário offline'</span> })
+      },
+    },
+  },
+
+  websocket: {
+    open:  (ws) => conexoes.set(ws.data.userId, ws),
+    close: (ws) => conexoes.delete(ws.data.userId),
+  },
+})</pre>
+</div>
+
+<div class="callout warn">
+   <strong>Browser não envia headers no WebSocket.</strong> O browser não
+   permite passar <code>Authorization</code> na abertura de uma conexão
+   WebSocket. Use query string para o token:
+   <code>ws://host/ws?token=abc</code> e leia com
+   <code>new URL(req.url).searchParams.get('token')</code> antes de chamar
+   <code>req.upgrade()</code>.
+</div>
+
+<hr />
+
+<h2 class="section" id="system">
+   systemResponses <a class="anchor" href="#serve/system">#</a>
+</h2>
+
+<p>
+   Objeto com factories de resposta JSON padronizadas para os códigos de erro
+   mais comuns. O servidor usa internamente — mas você pode usar nos seus
+   próprios handlers para manter o formato de erro consistente em toda a
+   aplicação.
+</p>
+
+<h3 class="sub">Shape da resposta</h3>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Estrutura JSON retornada por qualquer systemResponse</span
+         >
+      </div>
+   </div>
+   <pre>{
+  statusCode: <span class="num">404</span>,
+  error:      <span class="str">"Not Found"</span>,
+  message:    <span class="str">"Usuário não encontrado"</span>,    <span class="cm">// customizável</span>
+  path:       <span class="str">"/api/users/abc"</span>,           <span class="cm">// extraído de req.url</span>
+  timestamp:  <span class="str">"2026-04-23T12:00:00.000Z"</span>  <span class="cm">// momento da resposta</span>
+}</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Usando systemResponses nos handlers</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, systemResponses } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+serve({
+  routes: {
+    <span class="str">'/usuarios/:id'</span>: {
+      GET: <span class="kw">async</span> (req) => {
+        <span class="kw">const</span> user = <span class="kw">await</span> db.users.find(req.params.id)
+        <span class="kw">if</span> (!user)
+          <span class="kw">return</span> systemResponses[<span class="num">404</span>](req, <span class="str">'Usuário não encontrado'</span>)
+        <span class="kw">return</span> Response.json(user)
+      },
+
+      DELETE: <span class="kw">async</span> (req) => {
+        <span class="kw">if</span> (!req.user)
+          <span class="kw">return</span> systemResponses[<span class="num">401</span>](req)
+
+        <span class="kw">if</span> (req.user.role !== <span class="str">'admin'</span>)
+          <span class="kw">return</span> systemResponses[<span class="num">403</span>](req, <span class="str">'Apenas admins podem deletar usuários'</span>)
+
+        <span class="kw">await</span> db.users.delete(req.params.id)
+        <span class="kw">return</span> Response.json({ deleted: <span class="kw">true</span> })
+      },
+    },
+  },
+})</pre>
+</div>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Código</th>
+         <th>error</th>
+         <th>Usado automaticamente por</th>
+      </tr>
+      <tr>
+         <td><code>400</code></td>
+         <td>Bad Request</td>
+         <td>— (uso manual nos handlers)</td>
+      </tr>
+      <tr>
+         <td><code>401</code></td>
+         <td>Unauthorized</td>
+         <td><code>requireAuth</code> quando <code>req.user</code> é null</td>
+      </tr>
+      <tr>
+         <td><code>403</code></td>
+         <td>Forbidden</td>
+         <td>— (uso manual nos handlers)</td>
+      </tr>
+      <tr>
+         <td><code>404</code></td>
+         <td>Not Found</td>
+         <td>Nenhuma rota casou e <code>fetch</code> não definido</td>
+      </tr>
+      <tr>
+         <td><code>405</code></td>
+         <td>Method Not Allowed</td>
+         <td>Rota existe mas método não está no MethodMap</td>
+      </tr>
+      <tr>
+         <td><code>429</code></td>
+         <td>Too Many Requests</td>
+         <td>Rate limit esgotado para o IP</td>
+      </tr>
+      <tr>
+         <td><code>500</code></td>
+         <td>Internal Server Error</td>
+         <td>Exceção não tratada e handler <code>error</code> não definido</td>
+      </tr>
+      <tr>
+         <td><code>503</code></td>
+         <td>Service Unavailable</td>
+         <td>Request chegou durante o graceful shutdown</td>
+      </tr>
+   </table>
+</div>
+
+<div class="callout note">
+   <span class="callout-icon"
+      ><svg
+         width="14"
+         height="14"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="2.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="color: var(--blue); flex-shrink: 0; margin-top: 2px"
+      >
+         <circle cx="12" cy="12" r="10" />
+         <line x1="12" y1="8" x2="12" y2="8" />
+         <line x1="12" y1="12" x2="12" y2="16" /></svg
+   ></span>
+   <span class="callout-body"
+      ><strong>Sem informação vazada.</strong> As respostas automáticas (404,
+      405, 500) nunca expõem stack trace, lista de rotas ou detalhes internos —
+      apenas o shape padronizado acima.</span
+   >
+</div>
+
+<hr />
+
+<h2 class="section" id="error">
+   Tratamento de erros <a class="anchor" href="#serve/error">#</a>
+</h2>
+
+<p>
+   Se um handler lançar uma exceção não tratada, o serve captura e chama o
+   handler <code>error</code>. Se <code>error</code> não for definido, usa
+   <code>systemResponses[500]</code> automaticamente.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Error handler global com log e resposta customizada</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>serve({
+  error: (err) => {
+    <span class="cm">// Em desenvolvimento: expõe a mensagem do erro</span>
+    <span class="kw">if</span> (process.env.NODE_ENV !== <span class="str">'production'</span>) {
+      <span class="kw">return</span> Response.json(
+        { error: (err <span class="kw">as</span> <span class="cls">Error</span>).message, stack: (err <span class="kw">as</span> <span class="cls">Error</span>).stack },
+        { status: <span class="num">500</span> }
+      )
+    }
+
+    <span class="cm">// Em produção: mensagem genérica + log no Sentry</span>
+    Sentry.captureException(err)
+    <span class="kw">return</span> Response.json({ error: <span class="str">'Erro interno do servidor'</span> }, { status: <span class="num">500</span> })
+  },
+
+  routes: {
+    <span class="str">'/explode'</span>: () => { <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">'💥'</span>) },  <span class="cm">// capturado pelo error handler</span>
+  },
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="shutdown">
+   Graceful Shutdown <a class="anchor" href="#serve/shutdown">#</a>
+</h2>
+
+<p>
+   O graceful shutdown orquestra o encerramento seguro do servidor — para novas
+   conexões, aguarda requests ativas terminarem, encerra WebSockets abertos e
+   chama hooks de limpeza antes de matar o processo. Isso evita requests
+   cortadas no meio e garante que o banco seja fechado corretamente.
+</p>
+
+<h3 class="sub">O que acontece em ordem</h3>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Passo</th>
+         <th>O que acontece</th>
+      </tr>
+      <tr>
+         <td><strong>1</strong></td>
+         <td>
+            Para de aceitar novas conexões — <code>server.close()</code>. Novas
+            requests recebem <code>503</code> com <code>Retry-After: 30</code>
+         </td>
+      </tr>
+      <tr>
+         <td><strong>2</strong></td>
+         <td>
+            Envia close frame <code>1001 Going Away</code> para todos os
+            WebSockets rastreados e limpa o Set interno
+         </td>
+      </tr>
+      <tr>
+         <td><strong>3</strong></td>
+         <td>
+            Verifica <code>activeRequests</code> a cada 50ms. Continua quando
+            chegar a zero ou o timeout for excedido
+         </td>
+      </tr>
+      <tr>
+         <td><strong>4</strong></td>
+         <td>
+            Destrói todas as conexões TCP restantes rastreadas em
+            <code>openConnections</code>
+         </td>
+      </tr>
+      <tr>
+         <td><strong>5</strong></td>
+         <td>
+            Chama <code>onShutdown()</code> — fecha banco, limpa cache, faz
+            flush de logs
+         </td>
+      </tr>
+   </table>
+</div>
+
+<h3 class="sub">Exemplo 1 — configuração automática via sinais</h3>
+
+<p>
+   Quando <code>shutdown</code> é configurado no <code>serve()</code>, os sinais
+   <code>SIGINT</code> e <code>SIGTERM</code> são registrados automaticamente.
+   Ctrl+C ou <code>kill</code> disparam o graceful shutdown sem nenhum código
+   extra.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Graceful shutdown automático no SIGTERM</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> server = serve({
+  routes: { <span class="str">'/'</span>: () => Response.json({ ok: <span class="kw">true</span> }) },
+
+  shutdown: {
+    timeout:    <span class="num">10_000</span>,                     <span class="cm">// aguarda até 10s pelas requests ativas</span>
+    signals:    [<span class="str">'SIGINT'</span>, <span class="str">'SIGTERM'</span>],       <span class="cm">// padrão — Ctrl+C ou kill</span>
+    onShutdown: <span class="kw">async</span> () => {
+      <span class="kw">await</span> db.close()                       <span class="cm">// fecha conexões com o banco</span>
+      <span class="kw">await</span> cache.flush()                    <span class="cm">// grava dados pendentes no cache</span>
+      <span class="kw">await</span> logger.drain()                   <span class="cm">// flush de logs em buffer</span>
+      console.log(<span class="str">'✓ limpeza concluída'</span>)
+    },
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Exemplo 2 — shutdown manual em testes ou scripts</h3>
+
+<p>
+   Você pode chamar <code>gracefulShutdown()</code> diretamente — útil em testes
+   de integração, scripts de manutenção ou quando um evento da aplicação
+   sinaliza que é hora de parar.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Chamada manual — útil em testes e scripts</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> server = serve({ routes: { <span class="str">'/'</span>: () => Response.json({ ok: <span class="kw">true</span> }) } })
+server.listen()
+
+<span class="cm">// Depois de rodar seus testes:</span>
+<span class="kw">await</span> server.gracefulShutdown()
+
+<span class="cm">// Ou com opções que sobrescrevem as configuradas no serve()</span>
+<span class="kw">await</span> server.gracefulShutdown({
+  timeout:    <span class="num">2_000</span>,     <span class="cm">// timeout menor para testes não travarem</span>
+  onShutdown: <span class="kw">async</span> () => { <span class="cm">/* limpeza específica de teste */</span> },
+})
+
+<span class="cm">// Para parar sem esperar pelas requests ativas (não recomendado em produção):</span>
+<span class="kw">await</span> server.stop()</pre>
+</div>
+
+<div class="callout warn">
+   <strong>503 durante o shutdown.</strong> Qualquer request que chegar enquanto
+   o servidor está encerrando recebe imediatamente
+   <code>503 Service Unavailable</code> com <code>Connection: close</code> e
+   <code>Retry-After: 30</code>. Load balancers e proxies reversos reconhecem
+   esse padrão e param de rotear tráfego para essa instância.
+</div>
+
+<hr />
+
+<h2 class="section" id="listen">
+   listen() — opções de inicialização
+   <a class="anchor" href="#serve/listen">#</a>
+</h2>
+
+<p>
+   O <code>serve()</code> retorna um objeto de servidor que ainda não está
+   escutando. Você chama <code>.listen()</code> para iniciá-lo. Isso permite
+   configurar o servidor antes de expô-lo à rede.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Todas as formas de chamar listen()</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> server = serve({ routes: { <span class="str">'/'</span>: () => Response.json({ ok: <span class="kw">true</span> }) } })
+
+<span class="cm">// 1. Sem argumentos — usa port e host definidos no serve()</span>
+server.listen()
+
+<span class="cm">// 2. Só callback — compatibilidade com Node.js server.listen(cb)</span>
+server.listen(() => console.log(<span class="str">'pronto'</span>))
+
+<span class="cm">// 3. Objeto de opções completo</span>
+server.listen({
+  port:   <span class="num">4000</span>,
+  host:   <span class="str">'127.0.0.1'</span>,   <span class="cm">// expõe só localmente</span>
+  logger: { level: <span class="str">'verbose'</span> },  <span class="cm">// sobrescreve o logger configurado no serve()</span>
+
+  <span class="cm">// banner substitui o log padrão de inicialização</span>
+  banner: (url) => {
+    console.log(<span class="str">`
+  ┌─────────────────────────────────────┐
+  │  🚀  Servidor iniciado              │
+  │  ${url.padEnd(<span class="num">35</span>)}│
+  │  Ambiente: ${(process.env.NODE_ENV ?? <span class="str">'dev'</span>).padEnd(<span class="num">24</span>)}│
+  └─────────────────────────────────────┘`</span>)
+  },
+
+  <span class="cm">// onReady — hook que roda após o servidor estar escutando</span>
+  onReady: (url) => {
+    setupHealthCheck(url)
+    notifyDeploymentSystem(url)
+  },
+})</pre>
+</div>
+
+<h3 class="sub">Acesso programático após o listen</h3>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Propriedades e métodos do server após listen()</span
+         >
+      </div>
+   </div>
+   <pre>server.url                           <span class="cm">// string — ex: 'http://localhost:3000'</span>
+<span class="kw">await</span> server.gracefulShutdown()      <span class="cm">// encerramento seguro</span>
+<span class="kw">await</span> server.stop()                  <span class="cm">// para imediatamente, sem esperar requests</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="safecompare">
+   safeCompare <a class="anchor" href="#serve/safecompare">#</a>
+</h2>
+
+<p>
+   Compara duas strings em tempo constante — independente de onde elas divergem.
+   O operador
+   <code>===</code> do JavaScript pode terminar mais rápido quando as strings
+   diferem logo no começo, e isso cria uma janela de timing attack que permite
+   adivinhar tokens caractere por caractere. <code>safeCompare</code> sempre
+   leva o mesmo tempo, eliminando essa vulnerabilidade.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">safeCompare — quando e como usar</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { safeCompare } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// ❌ Evite para tokens e senhas — vulnerável a timing attack</span>
+<span class="kw">if</span> (token === process.env.SECRET) { <span class="cm">/* ... */</span> }
+
+<span class="cm">// ✅ Use safeCompare — tempo constante sempre</span>
+<span class="kw">if</span> (safeCompare(token, process.env.SECRET)) { <span class="cm">/* ... */</span> }
+
+<span class="cm">// Retorna boolean — false se uma das strings for undefined/null</span>
+safeCompare(<span class="str">'abc'</span>, <span class="str">'abc'</span>)   <span class="cm">// true</span>
+safeCompare(<span class="str">'abc'</span>, <span class="str">'xyz'</span>)   <span class="cm">// false</span>
+safeCompare(<span class="str">'abc'</span>, <span class="kw">null</span>)    <span class="cm">// false</span></pre>
+</div>
+
+<div class="callout tip">
+   <strong>Regra simples:</strong> sempre que comparar um valor vindo de uma
+   request (header, query, body) com um segredo armazenado (API key, webhook
+   secret, token), use <code>safeCompare</code> em vez de <code>===</code>.
+</div>
+
+<hr />
+
+<h2 class="section" id="tipos">
+   Tipos TypeScript exportados <a class="anchor" href="#serve/tipos">#</a>
+</h2>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Tipo</th>
+         <th>Descrição</th>
+      </tr>
+      <tr>
+         <td><code>ServeOptions&lt;TUser&gt;</code></td>
+         <td>Todas as opções do <code>serve()</code></td>
+      </tr>
+      <tr>
+         <td><code>ListenOptions</code></td>
+         <td>Opções do <code>.listen()</code> — port, host, banner, onReady</td>
+      </tr>
+      <tr>
+         <td><code>ShutdownOptions</code></td>
+         <td>
+            Configuração do graceful shutdown — timeout, signals, onShutdown
+         </td>
+      </tr>
+      <tr>
+         <td><code>BunLikeRequest&lt;TUser&gt;</code></td>
+         <td>
+            Request estendida com <code>params</code>, <code>user</code> e
+            <code>upgrade()</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>RouteHandler&lt;TUser&gt;</code></td>
+         <td>Tipo de uma função handler de rota</td>
+      </tr>
+      <tr>
+         <td><code>Middleware&lt;TUser&gt;</code></td>
+         <td>
+            Tipo de um middleware — retorna <code>null</code> ou
+            <code>Response</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>MethodMap&lt;TUser&gt;</code></td>
+         <td>
+            Objeto com um handler por método HTTP e <code>middleware?</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>Routes&lt;TUser&gt;</code></td>
+         <td>Mapa completo de rotas — chave é o path</td>
+      </tr>
+      <tr>
+         <td><code>AuthFunction&lt;TUser&gt;</code></td>
+         <td>
+            Tipo da função <code>auth</code> — retorna <code>TUser | null</code>
+         </td>
+      </tr>
+      <tr>
+         <td><code>LoggerOptions</code></td>
+         <td>Configuração do logger — level, prefix, ignore, onLog</td>
+      </tr>
+      <tr>
+         <td><code>LogEntry</code></td>
+         <td>Dados de uma entrada de log disponíveis no <code>onLog</code></td>
+      </tr>
+      <tr>
+         <td><code>LogLevel</code></td>
+         <td><code>'minimal' | 'standard' | 'verbose'</code></td>
+      </tr>
+      <tr>
+         <td><code>RateLimitOptions</code></td>
+         <td>
+            Configuração do rate limit — windowMs, max, message, trustProxy
+         </td>
+      </tr>
+      <tr>
+         <td><code>WSHandlers&lt;TData&gt;</code></td>
+         <td>
+            Handlers do WebSocket — open, message, close, error, allowedOrigins…
+         </td>
+      </tr>
+      <tr>
+         <td><code>WSContext&lt;TData&gt;</code></td>
+         <td>
+            O objeto <code>ws</code> nos handlers de WebSocket — send(), data,
+            etc.
+         </td>
+      </tr>
+      <tr>
+         <td><code>SystemResponseBody</code></td>
+         <td>
+            Shape JSON das respostas padronizadas — statusCode, error, message,
+            path, timestamp
+         </td>
+      </tr>
+   </table>
+</div>
+
+<hr />
+
+<h2 class="section" id="cheatsheet">
+   Cheatsheet <a class="anchor" href="#serve/cheatsheet">#</a>
+</h2>
+
+<p>Tudo em um lugar só para consulta rápida.</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >data-handlers/serve — referência completa</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { serve, requireAuth, systemResponses, safeCompare } <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="kw">const</span> server = serve({
+  port:   <span class="num">3000</span>,
+  host:   <span class="str">'0.0.0.0'</span>,
+  logger: { level: <span class="str">'standard'</span>, ignore: [<span class="str">'/health'</span>], onLog: (entry) => {} },
+
+  auth: <span class="kw">async</span> (req) => verifyToken(req.headers.get(<span class="str">'authorization'</span>)),
+
+  rateLimit: { windowMs: <span class="num">60_000</span>, max: <span class="num">100</span>, trustProxy: <span class="kw">false</span> },
+
+  middleware: [corsMiddleware],  <span class="cm">// global</span>
+
+  routes: {
+    <span class="str">'/'</span>:                () => Response.json({ ok: <span class="kw">true</span> }),
+    <span class="str">'/users'</span>:           { GET: getUsers, POST: createUser },
+    <span class="str">'/users/:id'</span>:       { GET: getUser, PATCH: updateUser, DELETE: deleteUser },
+    <span class="str">'/me'</span>:              { middleware: [requireAuth], GET: (req) => Response.json(req.user) },
+    <span class="str">'/ws'</span>:              { middleware: [requireAuth], GET: (req) => req.upgrade({ user: req.user }) },
+    <span class="str">'/static/*'</span>:        (req) => serveStatic(req.url),
+  },
+
+  websocket: {
+    allowedOrigins: [<span class="str">'https://meusite.com'</span>],
+    maxPayload:     <span class="num">64</span> * <span class="num">1024</span>,
+    heartbeat:      <span class="num">30_000</span>,
+    open:    (ws)       => ws.send(<span class="str">'bem-vindo'</span>),
+    message: (ws, data) => ws.send(<span class="str">`eco: ${data}`</span>),
+    close:   (ws, code) => console.log(<span class="str">'fechou:'</span>, code),
+    error:   (ws, err)  => console.error(<span class="str">'erro:'</span>, err),
+  },
+
+  shutdown: {
+    timeout:    <span class="num">10_000</span>,
+    signals:    [<span class="str">'SIGINT'</span>, <span class="str">'SIGTERM'</span>],
+    onShutdown: <span class="kw">async</span> () => <span class="kw">await</span> db.close(),
+  },
+
+  error: (err) => Response.json({ error: String(err) }, { status: <span class="num">500</span> }),
+  fetch: (req) => systemResponses[<span class="num">404</span>](req),
+})
+
+server.listen({
+  banner:  (url) => console.log(<span class="str">`🚀 ${url}`</span>),
+  onReady: (url) => setupHealthCheck(url),
+})
+
+<span class="cm">// Propriedades e métodos após listen()</span>
+server.url                           <span class="cm">// 'http://localhost:3000'</span>
+<span class="kw">await</span> server.gracefulShutdown()      <span class="cm">// encerramento seguro</span>
+<span class="kw">await</span> server.stop()                  <span class="cm">// para imediatamente</span>
+
+<span class="cm">// Helpers disponíveis</span>
+safeCompare(a, b)                    <span class="cm">// boolean — comparação em tempo constante</span>
+systemResponses[<span class="num">400</span>](req, <span class="str">'msg'</span>)     <span class="cm">// 400 | 401 | 403 | 404 | 405 | 429 | 500 | 503</span>
+requireAuth                          <span class="cm">// middleware: 401 se req.user === null</span></pre>
+</div>

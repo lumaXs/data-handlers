@@ -1,0 +1,472 @@
+<h1 class="page-title">handlers proxy</h1>
+<p class="page-subtitle">
+   O objeto <code>handlers</code> é um <strong>Proxy</strong> que cria accessors
+   dinamicamente para cada tipo registrado no registry. Em vez de passar o tipo
+   como string, você acessa o tipo como propriedade e chama o método
+   diretamente.
+</p>
+
+<h2 class="section" id="fluente">
+   Uso fluente <a class="anchor" href="#handlers/fluente">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">handlers proxy — os quatro métodos</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+handlers.cpf.normalize(<span class="str">'11144477735'</span>)   <span class="cm">// '111.444.777-35'  — lança se inválido</span>
+handlers.cpf.parse(<span class="str">'11144477735'</span>)      <span class="cm">// '111.444.777-35'  — alias de .normalize()</span>
+
+handlers.cpf.validate(<span class="str">'000.000.000-00'</span>) <span class="cm">// { valid: false, value: null, error: '...' }</span>
+handlers.cpf.safe(<span class="str">'000.000.000-00'</span>)    <span class="cm">// idem — alias de .validate()</span></pre>
+</div>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Método</th>
+         <th>Comportamento</th>
+         <th>Alias de</th>
+      </tr>
+      <tr>
+         <td>.normalize(v, opts)</td>
+         <td>Normaliza — lança <code>TypeError</code> se inválido</td>
+         <td>—</td>
+      </tr>
+      <tr>
+         <td>.validate(v, opts)</td>
+         <td>Nunca lança — retorna <code>{ valid, value, error }</code></td>
+         <td>—</td>
+      </tr>
+      <tr>
+         <td>.parse(v, opts)</td>
+         <td>Idêntico a <code>.normalize()</code></td>
+         <td>estilo Zod</td>
+      </tr>
+      <tr>
+         <td>.safe(v, opts)</td>
+         <td>Idêntico a <code>.validate()</code></td>
+         <td>estilo Zod</td>
+      </tr>
+   </table>
+</div>
+
+<div class="callout tip">
+   <strong>Qual usar?</strong> Use <code>.parse()</code> quando quiser falhar
+   ruidosamente — por exemplo, ao normalizar dados antes de salvar no banco. Use
+   <code>.safe()</code> para dar feedback ao usuário sem interromper o fluxo.
+</div>
+
+<hr />
+
+<h2 class="section" id="introspect">
+   Introspecção <a class="anchor" href="#handlers/introspect">#</a>
+</h2>
+
+<p>
+   O proxy expõe algumas propriedades especiais para inspecionar o estado do
+   registry em runtime. Isso é útil para checar se um plugin está disponível
+   antes de usá-lo, ou para listar todos os tipos em ferramentas de debug e
+   geração dinâmica de código.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >handlers.has · handlers.types · handlers.$</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>handlers.has(<span class="str">'cpf'</span>)       <span class="cm">// true  — tipo existe no registry?</span>
+handlers.has(<span class="str">'xyz'</span>)       <span class="cm">// false — tipo inexistente</span>
+
+handlers.types
+<span class="cm">// ['name','number','date','password','url','uuid','any','cpf','cnpj','phone','cep','slug','email','rg','color']</span>
+
+<span class="cm">// Namespace meta $ — organiza introspecção separada da API principal</span>
+handlers.$.has(<span class="str">'cpf'</span>)     <span class="cm">// true</span>
+handlers.$.types           <span class="cm">// mesmo array acima</span>
+
+<span class="cm">// Tentar atribuir diretamente lança TypeError — use register()</span>
+handlers.name = <span class="str">'algo'</span>    <span class="cm">// → TypeError: Use register() to add handlers.</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="name">
+   Handler: name <a class="anchor" href="#handlers/name">#</a>
+</h2>
+
+<p>
+   Converte nomes para Title Case com tratamento correto de acentos e
+   conectivos. Remove espaços extras no início, fim e entre palavras, e
+   capitaliza a primeira letra de cada palavra — exceto os conectivos da lista
+   padrão.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">name</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>handlers.name.normalize(<span class="str">'MARIA SILVA'</span>)           <span class="cm">// 'Maria Silva'</span>
+handlers.name.normalize(<span class="str">'  joão   da   silva  '</span>)  <span class="cm">// 'João da Silva'</span>
+handlers.name.normalize(<span class="str">'pedro de souza'</span>)         <span class="cm">// 'Pedro de Souza'</span>
+handlers.name.normalize(<span class="str">'maria das dores'</span>)        <span class="cm">// 'Maria das Dores'</span></pre>
+</div>
+
+<p>
+   Conectivos mantidos em minúsculo por padrão:
+   <code>de, da, do, das, dos, e, of, the, and, at, in, on</code>
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Opção lowerCaseWords — controle fino sobre conectivos</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Desabilitar completamente — todas as palavras capitalizadas</span>
+handlers.name.normalize(<span class="str">'joao de paula'</span>, { lowerCaseWords: [] })
+<span class="cm">// → 'Joao De Paula'</span>
+
+<span class="cm">// Só os conectivos que você especificar ficam em minúsculo</span>
+handlers.name.normalize(<span class="str">'casa das flores'</span>, { lowerCaseWords: [<span class="str">'das'</span>] })
+<span class="cm">// → 'Casa das Flores'</span>
+
+<span class="cm">// Adicionar palavras customizadas à lista padrão</span>
+handlers.name.normalize(<span class="str">'irmãos van den berg'</span>, {
+  lowerCaseWords: [<span class="str">'de'</span>, <span class="str">'da'</span>, <span class="str">'do'</span>, <span class="str">'das'</span>, <span class="str">'dos'</span>, <span class="str">'e'</span>, <span class="str">'van'</span>, <span class="str">'den'</span>]
+})
+<span class="cm">// → 'Irmãos van den Berg'</span></pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Erros do handler name</span>
+      </div>
+   </div>
+   <pre>handlers.name.normalize(<span class="str">''</span>)    <span class="cm">// TypeError: [normalize:name] Expected non-empty string.</span>
+handlers.name.normalize(<span class="num">123</span>)   <span class="cm">// TypeError: [normalize:name] Expected non-empty string. Received: number</span>
+handlers.name.normalize(<span class="kw">null</span>)  <span class="cm">// TypeError: [normalize:name] Expected non-empty string. Received: null</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="number">
+   Handler: number <a class="anchor" href="#handlers/number">#</a>
+</h2>
+
+<p>
+   Delega para <code>Intl.NumberFormat</code>. Locale padrão:
+   <code>pt-BR</code>. Aceita qualquer opção do
+   <code>Intl.NumberFormatOptions</code> — formatação de moeda, percentual,
+   notação científica, casas decimais, separadores, etc.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">number — formatos comuns</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Formato padrão pt-BR</span>
+handlers.number.normalize(<span class="num">1234567.89</span>)
+<span class="cm">// → '1.234.567,89'</span>
+
+<span class="cm">// Locale en-US</span>
+handlers.number.normalize(<span class="num">1234567.89</span>, { locale: <span class="str">'en-US'</span> })
+<span class="cm">// → '1,234,567.89'</span>
+
+<span class="cm">// Moeda BRL</span>
+handlers.number.normalize(<span class="num">9.9</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → 'R$ 9,90'</span>
+
+<span class="cm">// Moeda USD</span>
+handlers.number.normalize(<span class="num">9.9</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'USD'</span>, locale: <span class="str">'en-US'</span> })
+<span class="cm">// → '$9.90'</span>
+
+<span class="cm">// Percentual</span>
+handlers.number.normalize(<span class="num">0.753</span>, { style: <span class="str">'percent'</span>, maximumFractionDigits: <span class="num">1</span> })
+<span class="cm">// → '75,3%'</span>
+
+<span class="cm">// Casas decimais fixas</span>
+handlers.number.normalize(<span class="num">3.14159</span>, { maximumFractionDigits: <span class="num">2</span> })
+<span class="cm">// → '3,14'</span></pre>
+</div>
+
+<div class="callout warn">
+   <strong>Erros distintos:</strong> <code>TypeError</code> se o value não for
+   do tipo <code>number</code>. <code>RangeError</code> se for
+   <code>NaN</code> ou <code>Infinity</code>. A diferença é intencional — você
+   sabe exatamente o que deu errado sem inspecionar a mensagem.
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Erros do handler number</span>
+      </div>
+   </div>
+   <pre>handlers.number.normalize(<span class="str">'123'</span>)     <span class="cm">// TypeError  — não é do tipo number</span>
+handlers.number.normalize(<span class="cls">NaN</span>)       <span class="cm">// RangeError — NaN não é finito</span>
+handlers.number.normalize(<span class="cls">Infinity</span>)  <span class="cm">// RangeError — Infinity não é finito</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="date">
+   Handler: date <a class="anchor" href="#handlers/date">#</a>
+</h2>
+
+<p>
+   Delega para <code>Intl.DateTimeFormat</code>. Locale padrão:
+   <code>pt-BR</code>. Aceita três formatos de entrada: instância de
+   <code>Date</code>, string ISO 8601, ou timestamp Unix em milissegundos.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">date — três tipos de entrada</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Instância de Date</span>
+handlers.date.normalize(<span class="kw">new</span> <span class="cls">Date</span>(<span class="str">'2024-01-15'</span>), { dateStyle: <span class="str">'long'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '15 de janeiro de 2024'</span>
+
+<span class="cm">// String ISO 8601</span>
+handlers.date.normalize(<span class="str">'2024-01-15T12:00:00'</span>, { dateStyle: <span class="str">'short'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '15/01/2024'</span>
+
+<span class="cm">// Timestamp Unix em ms (Date.now() ou valor do banco)</span>
+handlers.date.normalize(<span class="num">1735689600000</span>, { dateStyle: <span class="str">'medium'</span>, locale: <span class="str">'pt-BR'</span> })
+<span class="cm">// → '1 de jan. de 2025'</span></pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Os quatro estilos de data disponíveis</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> d = <span class="kw">new</span> <span class="cls">Date</span>(<span class="num">2024</span>, <span class="num">0</span>, <span class="num">15</span>)
+<span class="kw">const</span> o = { locale: <span class="str">'pt-BR'</span> }
+
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'short'</span>  }) <span class="cm">// '15/01/2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'medium'</span> }) <span class="cm">// '15 de jan. de 2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'long'</span>   }) <span class="cm">// '15 de janeiro de 2024'</span>
+handlers.date.normalize(d, { ...o, dateStyle: <span class="str">'full'</span>   }) <span class="cm">// 'segunda-feira, 15 de janeiro de 2024'</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="password">
+   Handler: password <a class="anchor" href="#handlers/password">#</a>
+</h2>
+
+<p>
+   Valida senhas com regras configuráveis. Diferente dos outros handlers,
+   <strong>não transforma o valor</strong>
+   — se a senha passar, é retornada exatamente como recebida. Se não passar,
+   lança com a descrição da regra violada.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">password — regras padrão</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Padrão: minLength 8, requer maiúscula, minúscula e caractere especial</span>
+handlers.password.normalize(<span class="str">'Senha@123'</span>)
+<span class="cm">// → 'Senha@123'  (retorna o valor original)</span>
+
+handlers.password.safe(<span class="str">'fraca'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:password] Password must be at least 8 characters' }</span>
+
+handlers.password.safe(<span class="str">'semEspecial1'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:password] Password must contain at least one special character' }</span>
+
+handlers.password.safe(<span class="str">'SEMMINUSCULA@1'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:password] Password must contain at least one lowercase letter' }</span></pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >password — todas as opções configuráveis</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>handlers.password.normalize(<span class="str">'SenhaSegura@123'</span>, {
+  minLength:        <span class="num">12</span>,      <span class="cm">// padrão: 8</span>
+  requireUppercase: <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireLowercase: <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireSpecial:   <span class="kw">true</span>,   <span class="cm">// padrão: true</span>
+  requireNumber:    <span class="kw">true</span>,   <span class="cm">// padrão: false</span>
+})</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">password em um schema de cadastro</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> signupSchema = schema({
+  name:     <span class="str">'name'</span>,
+  email:    <span class="str">'email'</span>,
+  password: <span class="str">'password'</span>,
+})
+
+<span class="cm">// Com regras customizadas:</span>
+<span class="kw">const</span> signupSchemaStrict = schema({
+  name:     <span class="str">'name'</span>,
+  email:    <span class="str">'email'</span>,
+  password: { type: <span class="str">'password'</span>, options: { minLength: <span class="num">12</span>, requireNumber: <span class="kw">true</span> } },
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="url">
+   Handler: url <a class="anchor" href="#handlers/url">#</a>
+</h2>
+
+<p>
+   Valida e normaliza URLs. Coloca o host em lowercase, adiciona trailing slash
+   quando necessário, e preserva path, query string e hash intactos. Por padrão,
+   aceita apenas <code>http</code> e <code>https</code> — outros protocolos
+   precisam ser habilitados explicitamente.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">url</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>handlers.url.normalize(<span class="str">'https://example.com'</span>)
+<span class="cm">// → 'https://example.com/'</span>
+
+handlers.url.normalize(<span class="str">'HTTPS://EXAMPLE.COM/api/v1'</span>)
+<span class="cm">// → 'https://example.com/api/v1'  (host normalizado para lowercase)</span>
+
+handlers.url.normalize(<span class="str">'https://x.com/path?foo=bar#section'</span>)
+<span class="cm">// → 'https://x.com/path?foo=bar#section'  (query e hash preservados)</span>
+
+<span class="cm">// Protocolo customizado (ftp não é permitido por padrão)</span>
+handlers.url.normalize(<span class="str">'ftp://files.example.com'</span>, { protocols: [<span class="str">'ftp'</span>] })
+<span class="cm">// → 'ftp://files.example.com/'</span>
+
+<span class="cm">// Sem permissão para ftp → lança</span>
+handlers.url.safe(<span class="str">'ftp://files.example.com'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:url] Protocol ftp: not allowed' }</span>
+
+handlers.url.safe(<span class="str">'nao-e-uma-url'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:url] Invalid URL' }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="uuid">
+   Handler: uuid <a class="anchor" href="#handlers/uuid">#</a>
+</h2>
+
+<p>
+   Valida o formato UUID e normaliza a capitalização. Suporta versões 1, 3, 4, 5
+   e 7. Por padrão retorna em lowercase. Pode exigir uma versão específica —
+   útil para garantir que IDs gerados com <code>crypto.randomUUID()</code> (v4)
+   sejam os únicos aceitos.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">uuid</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Normaliza para lowercase por padrão</span>
+handlers.uuid.normalize(<span class="str">'550E8400-E29B-41D4-A716-446655440000'</span>)
+<span class="cm">// → '550e8400-e29b-41d4-a716-446655440000'</span>
+
+<span class="cm">// Uppercase explícito</span>
+handlers.uuid.normalize(<span class="str">'550e8400-e29b-41d4-a716-446655440000'</span>, { uppercase: <span class="kw">true</span> })
+<span class="cm">// → '550E8400-E29B-41D4-A716-446655440000'</span>
+
+<span class="cm">// Exige versão específica — lança se não for v4</span>
+handlers.uuid.normalize(id, { version: <span class="num">4</span> })
+
+handlers.uuid.safe(<span class="str">'nao-e-uuid'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:uuid] Invalid UUID format' }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="any">
+   Handler: any <a class="anchor" href="#handlers/any">#</a>
+</h2>
+
+<p>
+   Passa qualquer valor não-nulo sem normalizar. Essencial em schemas para
+   campos que não têm um handler específico — metadata, configurações, flags,
+   arrays, objetos livres. Com a opção
+   <code>demandType</code> você pode restringir o tipo primitivo aceito, e com
+   <code>transform</code>
+   aplicar qualquer transformação customizada.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">any — passagem direta sem transformação</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Qualquer valor não-nulo passa</span>
+handlers.any.normalize(<span class="str">'texto'</span>)  <span class="cm">// 'texto'</span>
+handlers.any.normalize(<span class="num">42</span>)       <span class="cm">// 42</span>
+handlers.any.normalize(<span class="kw">true</span>)    <span class="cm">// true</span>
+handlers.any.normalize([<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]) <span class="cm">// [1, 2, 3]</span>
+handlers.any.normalize({ a: <span class="num">1</span> }) <span class="cm">// { a: 1 }</span>
+
+<span class="cm">// null e undefined lançam sempre</span>
+handlers.any.safe(<span class="kw">null</span>)       <span class="cm">// { valid: false, ... }</span>
+handlers.any.safe(<span class="kw">undefined</span>)  <span class="cm">// { valid: false, ... }</span></pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >any — com demandType (restringe o primitivo aceito)</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>>
+</div>

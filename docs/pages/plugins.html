@@ -1,0 +1,304 @@
+<h1 class="page-title">Plugins nacionais</h1>
+<p class="page-subtitle">
+   Plugins para documentos, endereços e formatos brasileiros. Todos seguem o
+   mesmo contrato dos handlers do core — <code>.normalize()</code> lança se
+   inválido, <code>.safe()</code> nunca lança. Todos são idempotentes: passar um
+   valor já formatado retorna o mesmo valor.
+</p>
+
+<div class="callout note">
+   <strong>Referência viva:</strong> a lista completa de tipos registrados está
+   sempre disponível em runtime via <code>handlers.types</code>. Novos plugins
+   podem ser adicionados além dos documentados aqui.
+</div>
+
+<hr />
+
+<h2 class="section" id="cpf">
+   Plugin: cpf <a class="anchor" href="#plugins/cpf">#</a>
+</h2>
+
+<p>
+   Valida usando o algoritmo oficial de dígito verificador (dois passes) e
+   formata no padrão
+   <code>000.000.000-00</code>. Rejeita sequências repetidas como
+   <code>111.111.111-11</code>
+   mesmo que os dígitos verificadores batam — esses CPFs são matematicamente
+   válidos, mas não são atribuídos pela Receita Federal.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">cpf</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Formata a partir de dígitos puros</span>
+handlers.cpf.normalize(<span class="str">'11144477735'</span>)
+<span class="cm">// → '111.444.777-35'</span>
+
+<span class="cm">// Idempotente — CPF já formatado passa sem alteração</span>
+handlers.cpf.normalize(<span class="str">'111.444.777-35'</span>)
+<span class="cm">// → '111.444.777-35'</span>
+
+<span class="cm">// Sequência repetida é rejeitada (não atribuída pela Receita Federal)</span>
+handlers.cpf.safe(<span class="str">'00000000000'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:cpf] Invalid CPF...' }</span>
+
+<span class="cm">// Dígito verificador errado</span>
+handlers.cpf.safe(<span class="str">'11144477700'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:cpf] Invalid CPF...' }</span>
+
+<span class="cm">// CPF válido</span>
+handlers.cpf.safe(<span class="str">'11144477735'</span>)
+<span class="cm">// → { valid: true, value: '111.444.777-35', error: null }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="cnpj">
+   Plugin: cnpj <a class="anchor" href="#plugins/cnpj">#</a>
+</h2>
+
+<p>
+   Valida pelo algoritmo de dígito verificador do CNPJ e formata no padrão
+   <code>00.000.000/0000-00</code>. Aceita CNPJ com ou sem máscara na entrada.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">cnpj</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Apenas dígitos</span>
+handlers.cnpj.normalize(<span class="str">'11222333000181'</span>)
+<span class="cm">// → '11.222.333/0001-81'</span>
+
+<span class="cm">// Idempotente</span>
+handlers.cnpj.normalize(<span class="str">'11.222.333/0001-81'</span>)
+<span class="cm">// → '11.222.333/0001-81'</span>
+
+<span class="cm">// Sequência repetida rejeitada</span>
+handlers.cnpj.safe(<span class="str">'00000000000000'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:cnpj] Invalid CNPJ...' }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="cep">
+   Plugin: cep <a class="anchor" href="#plugins/cep">#</a>
+</h2>
+
+<p>
+   Valida comprimento (exatamente 8 dígitos) e formata no padrão
+   <code>00000-000</code>. Não faz consulta de endereço — apenas valida o
+   formato e aplica a máscara.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">cep</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Formata a partir de dígitos</span>
+handlers.cep.normalize(<span class="str">'01310100'</span>)
+<span class="cm">// → '01310-100'</span>
+
+<span class="cm">// Idempotente</span>
+handlers.cep.normalize(<span class="str">'01310-100'</span>)
+<span class="cm">// → '01310-100'</span>
+
+<span class="cm">// Menos de 8 dígitos é inválido</span>
+handlers.cep.safe(<span class="str">'0131010'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:cep] CEP must have 8 digits' }</span>
+
+<span class="cm">// Mais de 8 dígitos também é inválido</span>
+handlers.cep.safe(<span class="str">'013101000'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:cep] CEP must have 8 digits' }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="phone">
+   Plugin: phone <a class="anchor" href="#plugins/phone">#</a>
+</h2>
+
+<p>
+   Suporta telefone fixo (10 dígitos: DDD + 8) e celular (11 dígitos: DDD + 9 +
+   8). O formato de saída detecta automaticamente o tipo e aplica a máscara
+   correta.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">phone</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Celular — 11 dígitos (DDD + 9 + número)</span>
+handlers.phone.normalize(<span class="str">'11987654321'</span>)
+<span class="cm">// → '(11) 98765-4321'</span>
+
+<span class="cm">// Fixo — 10 dígitos (DDD + número)</span>
+handlers.phone.normalize(<span class="str">'1134567890'</span>)
+<span class="cm">// → '(11) 3456-7890'</span>
+
+<span class="cm">// Idempotente</span>
+handlers.phone.normalize(<span class="str">'(11) 98765-4321'</span>)
+<span class="cm">// → '(11) 98765-4321'</span>
+
+<span class="cm">// Quantidade de dígitos incorreta</span>
+handlers.phone.safe(<span class="str">'123'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:phone] Expected 10 or 11-digit phone number' }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="rg">
+   Plugin: rg <a class="anchor" href="#plugins/rg">#</a>
+</h2>
+
+<p>
+   Formata no padrão SP <code>00.000.000-X</code>. Suporta RGs de 7 a 9 dígitos
+   e o dígito verificador especial <code>X</code>. A opção
+   <code>format: 'digits'</code> retorna apenas os dígitos sem máscara.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">rg</span>
+         <span class="card-tag green">pt-BR</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Padrão com 9 dígitos</span>
+handlers.rg.normalize(<span class="str">'123456789'</span>)
+<span class="cm">// → '12.345.678-9'</span>
+
+<span class="cm">// Dígito verificador X — aceito normalmente</span>
+handlers.rg.normalize(<span class="str">'12345678X'</span>)
+<span class="cm">// → '12.345.678-X'</span>
+
+<span class="cm">// Saída só com dígitos (sem máscara)</span>
+handlers.rg.normalize(<span class="str">'123456789'</span>, { format: <span class="str">'digits'</span> })
+<span class="cm">// → '123456789'</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="slug">
+   Plugin: slug <a class="anchor" href="#plugins/slug">#</a>
+</h2>
+
+<p>
+   Converte qualquer string em slug seguro para URL — remove acentos, converte
+   para lowercase, substitui espaços por hífens e remove caracteres especiais.
+   Útil para gerar URLs de posts, IDs legíveis, nomes de arquivos, etc.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">slug</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>handlers.slug.normalize(<span class="str">'Olá Mundo Legal!'</span>)
+<span class="cm">// → 'ola-mundo-legal'</span>
+
+handlers.slug.normalize(<span class="str">'Café & Chá'</span>)
+<span class="cm">// → 'cafe-cha'</span>
+
+handlers.slug.normalize(<span class="str">'  espaços   duplos  '</span>)
+<span class="cm">// → 'espacos-duplos'</span>
+
+<span class="cm">// Separador customizado</span>
+handlers.slug.normalize(<span class="str">'Meu Post Incrível'</span>, { separator: <span class="str">'_'</span> })
+<span class="cm">// → 'meu_post_incrivel'</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="email">
+   Plugin: email <a class="anchor" href="#plugins/email">#</a>
+</h2>
+
+<p>
+   Normaliza (<code>trim</code> + lowercase) e valida via RFC 5322 simplificado.
+   Exige o formato <code>local@dominio.tld</code> — domínio sem ponto é
+   rejeitado.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">email</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Normaliza espaços e capitalização</span>
+handlers.email.normalize(<span class="str">'  JOAO@EMAIL.COM  '</span>)
+<span class="cm">// → 'joao@email.com'</span>
+
+handlers.email.normalize(<span class="str">'USUARIO@EMAIL.COM'</span>)
+<span class="cm">// → 'usuario@email.com'</span>
+
+<span class="cm">// Formatos inválidos</span>
+handlers.email.safe(<span class="str">'invalido'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:email] Invalid email format' }</span>
+
+handlers.email.safe(<span class="str">'sem@dominio'</span>)
+<span class="cm">// → { valid: false, error: '[normalize:email] Invalid email format' }</span>
+
+handlers.email.safe(<span class="str">'ok@email.com'</span>)
+<span class="cm">// → { valid: true, value: 'ok@email.com', error: null }</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="color">
+   Plugin: color <a class="anchor" href="#plugins/color">#</a>
+</h2>
+
+<p>
+   Aceita <code>#rgb</code>, <code>#rrggbb</code> e <code>rgb(r, g, b)</code>.
+   Normaliza para lowercase hex por padrão. A opção <code>format</code> controla
+   o formato de saída — útil para converter entre representações.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">color</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Shorthand hex expandido e lowercase</span>
+handlers.color.normalize(<span class="str">'#abc'</span>)
+<span class="cm">// → '#aabbcc'</span>
+
+handlers.color.normalize(<span class="str">'#FF0080'</span>)
+<span class="cm">// → '#ff0080'</span>
+
+<span class="cm">// RGB → hex</span>
+handlers.color.normalize(<span class="str">'rgb(255, 0, 128)'</span>)
+<span class="cm">// → '#ff0080'</span>
+
+<span class="cm">// Formatos de saída</span>
+handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'rgb'</span>       })
+<span class="cm">// → 'rgb(255, 0, 128)'</span>
+
+handlers.color.normalize(<span class="str">'#ff0080'</span>, { format: <span class="str">'hex-upper'</span> })
+<span class="cm">// → '#FF0080'</span></pre>
+</div>

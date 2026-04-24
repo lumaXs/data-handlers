@@ -1,0 +1,186 @@
+<h1 class="page-title">Cheatsheet</h1>
+<p class="page-subtitle">
+   Referência rápida de toda a API em um só lugar. Útil para consultar
+   assinaturas, métodos disponíveis e formatos de retorno sem precisar navegar
+   pela documentação completa.
+</p>
+
+<h2 class="section" id="funcoes-base">
+   Funções base <a class="anchor" href="#cheatsheet/funcoes-base">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">normalize e validate</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { normalize, validate } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+normalize({ type, value, options })   <span class="cm">// string — lança TypeError se inválido</span>
+validate({ type, value, options })    <span class="cm">// { valid, value, error } — nunca lança</span></pre>
+</div>
+
+<h2 class="section" id="proxy">
+   handlers proxy <a class="anchor" href="#cheatsheet/proxy">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">handlers — métodos e introspecção</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+handlers.&lt;tipo&gt;.normalize(v, opts)   <span class="cm">// string — lança se inválido</span>
+handlers.&lt;tipo&gt;.validate(v, opts)    <span class="cm">// { valid, value, error } — nunca lança</span>
+handlers.&lt;tipo&gt;.parse(v, opts)       <span class="cm">// alias de .normalize()</span>
+handlers.&lt;tipo&gt;.safe(v, opts)        <span class="cm">// alias de .validate()</span>
+
+handlers.has(<span class="str">'cpf'</span>)                  <span class="cm">// boolean — tipo existe no registry?</span>
+handlers.types                        <span class="cm">// string[] — todos os tipos registrados</span>
+handlers.$.has(<span class="str">'cpf'</span>)               <span class="cm">// namespace meta — mesmas funcionalidades</span>
+handlers.$.types</pre>
+</div>
+
+<h2 class="section" id="schemas-ref">
+   Schemas <a class="anchor" href="#cheatsheet/schemas-ref">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >schema — definição, métodos e utilitários</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="cm">// Definição</span>
+<span class="kw">const</span> s = schema({
+  name:     <span class="str">'name'</span>,                                            <span class="cm">// forma curta</span>
+  doc:      { type: <span class="str">'cpf'</span>, label: <span class="str">'CPF'</span> },                    <span class="cm">// com label</span>
+  phone:    { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> },                 <span class="cm">// opcional</span>
+  country:  { type: <span class="str">'slug'</span>, default: <span class="str">'brasil'</span> },              <span class="cm">// com default</span>
+  total:    { type: <span class="str">'number'</span>, options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> } },
+})
+
+<span class="cm">// Uso</span>
+s.parse(obj)        <span class="cm">// objeto normalizado — lança SchemaError com .errors se inválido</span>
+s.safeParse(obj)    <span class="cm">// { success, data, errors } — nunca lança</span>
+
+<span class="cm">// Utilitários (todos retornam novos schemas)</span>
+s.partial()              <span class="cm">// todos os campos viram opcionais</span>
+s.pick(<span class="str">'name'</span>, <span class="str">'email'</span>) <span class="cm">// só esses campos</span>
+s.omit(<span class="str">'phone'</span>)         <span class="cm">// sem esse campo</span>
+s.extend({ x: <span class="str">'slug'</span> }) <span class="cm">// adiciona campos</span></pre>
+</div>
+
+<h2 class="section" id="extensao">
+   Extensão <a class="anchor" href="#cheatsheet/extensao">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">register, registerAliases, createPlugin</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { register, registerAliases, createPlugin } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+register(<span class="str">'tipo'</span>, handler)                  <span class="cm">// registra handler customizado</span>
+registerAliases(<span class="str">'name'</span>, <span class="str">'nome'</span>, <span class="str">'fullName'</span>) <span class="cm">// múltiplos nomes pro mesmo handler</span>
+createPlugin(<span class="str">'tipo'</span>, handler)               <span class="cm">// alias semântico de register()</span></pre>
+</div>
+
+<h2 class="section" id="serve-ref">
+   serve <a class="anchor" href="#cheatsheet/serve-ref">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">data-handlers/serve — tudo disponível</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> {
+  serve,           <span class="cm">// serve({ port, routes, middleware, auth, rateLimit, websocket, fetch, error })</span>
+  systemResponses, <span class="cm">// systemResponses[400 | 401 | 403 | 404 | 405 | 429 | 500](req, message?)</span>
+  requireAuth,     <span class="cm">// Middleware — bloqueia com 401 se req.user é null</span>
+  safeCompare,     <span class="cm">// safeCompare(a, b) — boolean, tempo constante</span>
+} <span class="kw">from</span> <span class="str">'data-handlers/serve'</span>
+
+<span class="cm">// Middleware: null → passa, Response → interrompe</span>
+<span class="cm">// Ordem: [global middleware] → [route middleware] → handler</span>
+
+<span class="cm">// Rate limit: sliding window, headers automáticos em todas as respostas</span>
+<span class="cm">// X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After</span>
+
+<span class="cm">// WebSocket: req.upgrade(data) numa rota GET → ws.data em todos os handlers</span></pre>
+</div>
+
+<h2 class="section" id="plugins-ref">
+   Plugins nacionais <a class="anchor" href="#cheatsheet/plugins-ref">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Todos os plugins e seus formatos de saída</span
+         >
+      </div>
+   </div>
+   <pre>handlers.cpf.normalize(<span class="str">'11144477735'</span>)          <span class="cm">// '111.444.777-35'</span>
+handlers.cnpj.normalize(<span class="str">'11222333000181'</span>)       <span class="cm">// '11.222.333/0001-81'</span>
+handlers.cep.normalize(<span class="str">'01310100'</span>)              <span class="cm">// '01310-100'</span>
+handlers.phone.normalize(<span class="str">'11987654321'</span>)         <span class="cm">// '(11) 98765-4321'</span>
+handlers.phone.normalize(<span class="str">'1134567890'</span>)          <span class="cm">// '(11) 3456-7890'</span>
+handlers.rg.normalize(<span class="str">'123456789'</span>)              <span class="cm">// '12.345.678-9'</span>
+handlers.slug.normalize(<span class="str">'Olá Mundo!'</span>)           <span class="cm">// 'ola-mundo'</span>
+handlers.email.normalize(<span class="str">'JOAO@EMAIL.COM'</span>)      <span class="cm">// 'joao@email.com'</span>
+handlers.color.normalize(<span class="str">'#abc'</span>)               <span class="cm">// '#aabbcc'</span>
+handlers.color.normalize(<span class="str">'rgb(255, 0, 128)'</span>)   <span class="cm">// '#ff0080'</span></pre>
+</div>
+
+<h2 class="section" id="handlers-ref">
+   Handlers do core <a class="anchor" href="#cheatsheet/handlers-ref">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Todos os handlers do core e principais opções</span
+         >
+      </div>
+   </div>
+   <pre>handlers.name.normalize(<span class="str">'joao da silva'</span>)              <span class="cm">// 'Joao da Silva'</span>
+handlers.name.normalize(v, { lowerCaseWords: [] })    <span class="cm">// desativa conectivos</span>
+
+handlers.number.normalize(<span class="num">1234.5</span>)                    <span class="cm">// '1.234,5'</span>
+handlers.number.normalize(v, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> })
+
+handlers.date.normalize(<span class="kw">new</span> <span class="cls">Date</span>(), { dateStyle: <span class="str">'long'</span>, locale: <span class="str">'pt-BR'</span> })
+handlers.date.normalize(<span class="str">'2024-01-15'</span>, { dateStyle: <span class="str">'short'</span> })
+handlers.date.normalize(<span class="num">1735689600000</span>)               <span class="cm">// timestamp Unix</span>
+
+handlers.password.normalize(v, { minLength: <span class="num">12</span>, requireNumber: <span class="kw">true</span> })
+
+handlers.url.normalize(v)                              <span class="cm">// normaliza host para lowercase</span>
+handlers.url.normalize(v, { protocols: [<span class="str">'ftp'</span>] })     <span class="cm">// habilita ftp</span>
+
+handlers.uuid.normalize(v)                             <span class="cm">// lowercase</span>
+handlers.uuid.normalize(v, { uppercase: <span class="kw">true</span>, version: <span class="num">4</span> })
+
+handlers.any.normalize(v)                              <span class="cm">// qualquer não-nulo</span>
+handlers.any.normalize(v, { demandType: <span class="str">'number'</span> })   <span class="cm">// restringe o primitivo</span>
+handlers.any.normalize(v, { transform: (v) => v * <span class="num">2</span> }) <span class="cm">// callback customizado</span></pre>
+</div>

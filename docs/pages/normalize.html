@@ -1,0 +1,154 @@
+<h1 class="page-title">normalize()</h1>
+<p class="page-subtitle">
+   Função de nível superior para normalização direta. Recebe um objeto com
+   <code>type</code>, <code>value</code> e <code>options</code> opcionais.
+   <strong>Lança um <code>TypeError</code> se o valor for inválido</strong> —
+   use quando quiser falhar ruidosamente e travar o fluxo.
+</p>
+
+<h2 class="section" id="assinatura">
+   Assinatura <a class="anchor" href="#normalize/assinatura">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Tipo</span>
+         <span class="card-tag amber">TypeScript</span>
+      </div>
+   </div>
+   <pre><span class="kw">function</span> <span class="fn">normalize</span>({
+  type:    <span class="kw">string</span>,
+  value:   <span class="kw">unknown</span>,
+  options?: <span class="kw">object</span>,
+}): <span class="kw">string</span></pre>
+</div>
+
+<p>
+   O parâmetro <code>type</code> é <strong>case-insensitive</strong> e ignora
+   espaços em volta — <code>'name'</code>, <code>'Name'</code> e
+   <code>' NAME '</code> são equivalentes. O <code>value</code>
+   pode ser qualquer coisa; cada handler define o que considera válido e lança
+   com uma mensagem descritiva se não passar.
+</p>
+
+<h2 class="section" id="exemplos">
+   Exemplos <a class="anchor" href="#normalize/exemplos">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">normalize() — uso geral</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { normalize } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+normalize({ type: <span class="str">'name'</span>,   value: <span class="str">'  joao   silva  '</span> })
+<span class="cm">// → 'Joao Silva'</span>
+
+normalize({ type: <span class="str">'cpf'</span>,    value: <span class="str">'11144477735'</span> })
+<span class="cm">// → '111.444.777-35'</span>
+
+normalize({ type: <span class="str">'number'</span>, value: <span class="num">1234567.89</span>, options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span>, locale: <span class="str">'pt-BR'</span> } })
+<span class="cm">// → 'R$ 1.234.567,89'</span>
+
+normalize({ type: <span class="str">'date'</span>,   value: <span class="kw">new</span> <span class="cls">Date</span>(), options: { dateStyle: <span class="str">'long'</span>, locale: <span class="str">'pt-BR'</span> } })
+<span class="cm">// → '3 de março de 2026'</span></pre>
+</div>
+
+<h2 class="section" id="erros">
+   Comportamento com erros <a class="anchor" href="#normalize/erros">#</a>
+</h2>
+
+<p>
+   Quando o valor não passa na validação do handler,
+   <code>normalize()</code> lança um <code>TypeError</code> com uma mensagem no
+   formato <code>[normalize:&lt;tipo&gt;] &lt;motivo&gt;</code>. Isso facilita
+   identificar exatamente qual campo e qual tipo causou o problema.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Exemplos de erros lançados</span>
+      </div>
+   </div>
+   <pre><span class="cm">// CPF inválido — dígito verificador errado</span>
+normalize({ type: <span class="str">'cpf'</span>, value: <span class="str">'000.000.000-00'</span> })
+<span class="cm">// → throws TypeError: [normalize:cpf] Invalid CPF. Received: 000.000.000-00</span>
+
+<span class="cm">// Tipo incorreto para number</span>
+normalize({ type: <span class="str">'number'</span>, value: <span class="str">'123'</span> })
+<span class="cm">// → throws TypeError: [normalize:number] Expected number, received string</span>
+
+<span class="cm">// String vazia para name</span>
+normalize({ type: <span class="str">'name'</span>, value: <span class="str">''</span> })
+<span class="cm">// → throws TypeError: [normalize:name] Expected non-empty string</span></pre>
+</div>
+
+<div class="callout tip">
+   <strong>Capturar o erro:</strong> se você quer tratar o caso de erro sem
+   deixar o processo explodir, envolva em <code>try/catch</code> ou use
+   <code>validate()</code> que nunca lança. Para validar objetos inteiros com
+   múltiplos campos, prefira o sistema de <code>schema()</code>.
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Capturando o TypeError manualmente</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">try</span> {
+  <span class="kw">const</span> cpf = normalize({ type: <span class="str">'cpf'</span>, value: inputDoUsuario })
+  salvarNoBanco(cpf)
+} <span class="kw">catch</span> (err) {
+  <span class="kw">if</span> (err <span class="kw">instanceof</span> <span class="cls">TypeError</span>) {
+    console.error(err.message) <span class="cm">// '[normalize:cpf] Invalid CPF...'</span>
+  }
+}</pre>
+</div>
+
+<h2 class="section" id="vs-handlers">
+   normalize() vs handlers proxy
+   <a class="anchor" href="#normalize/vs-handlers">#</a>
+</h2>
+
+<p>
+   <code>normalize()</code> é a função de baixo nível — você passa o tipo como
+   string. O objeto <code>handlers</code> é um Proxy que oferece a mesma
+   funcionalidade com uma sintaxe mais fluente. Ambos chamam o mesmo handler
+   internamente; escolha o que deixar o código mais legível no seu contexto.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">As duas formas são equivalentes</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { normalize, handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="cm">// Forma explícita com normalize()</span>
+normalize({ type: <span class="str">'cpf'</span>, value: <span class="str">'11144477735'</span> })
+<span class="cm">// → '111.444.777-35'</span>
+
+<span class="cm">// Forma fluente com handlers proxy</span>
+handlers.cpf.normalize(<span class="str">'11144477735'</span>)
+<span class="cm">// → '111.444.777-35'</span>
+
+<span class="cm">// Útil quando o tipo é dinâmico (vem de uma variável)</span>
+<span class="kw">const</span> type = obterTipoDoCampo(campo)
+normalize({ type, value: campo.valor })  <span class="cm">// não tem como usar o proxy aqui</span></pre>
+</div>
+
+<div class="callout note">
+   <strong>Quando preferir normalize():</strong> quando o tipo é dinâmico — vem
+   de uma configuração, de um mapa de campos, ou é calculado em runtime. Nesses
+   casos o proxy <code>handlers[type]</code> funciona também, mas
+   <code>normalize()</code> é mais explícito sobre a intenção.
+</div>

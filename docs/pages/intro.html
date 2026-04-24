@@ -1,0 +1,329 @@
+<h1 class="page-title">data-handlers</h1>
+<p class="page-subtitle">
+   Biblioteca de normalização e validação de dados para Node.js — sem
+   dependências externas, com suporte nacional de primeira classe e um sistema
+   de schemas para validar objetos inteiros de uma vez.
+</p>
+
+<div class="summary-grid">
+   <div class="summary-card">
+      <h3>Handlers do core</h3>
+      <ul>
+         <li>name — Title Case + conectivos</li>
+         <li>number — Intl.NumberFormat</li>
+         <li>date — Intl.DateTimeFormat</li>
+         <li>password, url, uuid, any</li>
+      </ul>
+   </div>
+   <div class="summary-card">
+      <h3>Plugins nacionais</h3>
+      <ul>
+         <li>CPF, CNPJ, RG</li>
+         <li>CEP, Telefone</li>
+         <li>Slug, E-mail, Cor</li>
+      </ul>
+   </div>
+   <div class="summary-card">
+      <h3>API fluente</h3>
+      <ul>
+         <li>handlers.cpf.parse()</li>
+         <li>handlers.cpf.safe()</li>
+         <li>handlers.has() · .types</li>
+      </ul>
+   </div>
+   <div class="summary-card">
+      <h3>Schemas</h3>
+      <ul>
+         <li>Valida objetos inteiros</li>
+         <li>parse · safeParse</li>
+         <li>extend · pick · omit</li>
+      </ul>
+   </div>
+</div>
+
+<p>
+   Provavelmente você já escreveu este tipo de código em vários lugares do seu
+   sistema — normalização e validação espalhadas, cada uma com sua implementação
+   diferente, difíceis de manter e de testar:
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Sem data-handlers — espalhado, inconsistente</span
+         >
+      </div>
+   </div>
+   <pre><span class="cm">// Em algum lugar do projeto...</span>
+<span class="kw">const</span> nome = input.trim().toLowerCase().replace(<span class="str">/\s+/g</span>, <span class="str">' '</span>)
+  .split(<span class="str">' '</span>).map(w => w[<span class="num">0</span>].toUpperCase() + w.slice(<span class="num">1</span>)).join(<span class="str">' '</span>)
+
+<span class="cm">// Em outro lugar...</span>
+<span class="kw">const</span> cpf = raw.replace(<span class="str">/\D/g</span>, <span class="str">''</span>)
+  .replace(<span class="str">/(\d{3})(\d{3})(\d{3})(\d{2})/</span>, <span class="str">'$1.$2.$3-$4'</span>)
+<span class="kw">if</span> (!cpfRegex.test(cpf)) <span class="kw">throw new</span> <span class="cls">Error</span>(<span class="str">'CPF inválido'</span>)
+
+<span class="cm">// E em outro...</span>
+<span class="kw">const</span> valor = <span class="kw">new</span> <span class="cls">Intl</span>.NumberFormat(<span class="str">'pt-BR'</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> }).format(n)</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Com data-handlers — uma API consistente para tudo</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+handlers.name.normalize(<span class="str">'  joao   silva  '</span>)                                       <span class="cm">// 'Joao Silva'</span>
+handlers.cpf.normalize(<span class="str">'11144477735'</span>)                                            <span class="cm">// '111.444.777-35'</span>
+handlers.number.normalize(<span class="num">1234.5</span>, { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> })      <span class="cm">// 'R$ 1.234,50'</span></pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="install">
+   Instalação <a class="anchor" href="#intro/install">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Terminal</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre>npm install data-handlers
+<span class="cm"># ou</span>
+pnpm add data-handlers</pre>
+</div>
+
+<div class="callout note">
+   <span class="callout-icon"
+      ><svg
+         width="14"
+         height="14"
+         viewBox="0 0 24 24"
+         fill="none"
+         stroke="currentColor"
+         stroke-width="2.5"
+         stroke-linecap="round"
+         stroke-linejoin="round"
+         style="color: var(--blue); flex-shrink: 0; margin-top: 2px"
+      >
+         <circle cx="12" cy="12" r="10" />
+         <line x1="12" y1="8" x2="12" y2="8" />
+         <line x1="12" y1="12" x2="12" y2="16" /></svg
+   ></span>
+   <span class="callout-body"
+      ><strong>Requisito:</strong> Node.js 18 ou superior. A lib usa ESM (<code
+         >type: "module"</code
+      >). O autocomplete TypeScript funciona em JS puro via os arquivos
+      <code>.d.ts</code> inclusos — nenhuma configuração extra necessária.</span
+   >
+</div>
+
+<hr />
+
+<h2 class="section" id="conceito">
+   Conceito central <a class="anchor" href="#intro/conceito">#</a>
+</h2>
+
+<p>
+   A lib mantém um <strong>registry</strong> interno — um <code>Map</code> que
+   associa um nome de tipo a uma função chamada <strong>handler</strong>.
+   Handlers do core são registrados automaticamente na importação. Plugins
+   adicionam novos tipos ao mesmo registry.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Como o registry funciona internamente</span>
+      </div>
+   </div>
+   <pre><span class="cm">// O registry é um Map simples</span>
+registry.get(<span class="str">'name'</span>)   <span class="cm">// → nameHandler()</span>
+registry.get(<span class="str">'number'</span>) <span class="cm">// → numberHandler()</span>
+registry.get(<span class="str">'cpf'</span>)    <span class="cm">// → cpfHandler()  ← registrado pelo plugin</span>
+
+<span class="cm">// Quando você chama handlers.name.normalize('joao'), internamente é:</span>
+<span class="kw">const</span> handler = registry.get(<span class="str">'name'</span>)
+<span class="kw">return</span> handler(<span class="str">'joao'</span>)  <span class="cm">// → 'Joao'</span></pre>
+</div>
+
+<p>
+   Um <strong>handler</strong> é qualquer função
+   <code>(value, options?) => string</code> que retorna o valor normalizado ou
+   lança um <code>TypeError</code> descritivo se o valor for inválido. A
+   interface é intencionalmente simples — isso é o que torna a lib extensível
+   sem cerimônia.
+</p>
+
+<hr />
+
+<h2 class="section" id="pattern-api">
+   Padrão: endpoint REST <a class="anchor" href="#intro/pattern-api">#</a>
+</h2>
+
+<p>
+   O uso mais comum é combinar schemas com handlers para validar e normalizar o
+   payload de uma request antes de salvar no banco. O schema processa todos os
+   campos e retorna os erros de uma vez — sem precisar de múltiplas validações
+   manuais.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Express — POST /usuarios</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { schema, <span class="cls">SchemaError</span> } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">const</span> cadastroSchema = schema({
+  name:     <span class="str">'name'</span>,
+  document: <span class="str">'cpf'</span>,
+  phone:    { type: <span class="str">'phone'</span>, optional: <span class="kw">true</span> },
+  email:    <span class="str">'email'</span>,
+  zipCode:  { type: <span class="str">'cep'</span>, label: <span class="str">'CEP'</span> },
+})
+
+app.post(<span class="str">'/usuarios'</span>, (req, res) => {
+  <span class="kw">const</span> result = cadastroSchema.safeParse(req.body)
+
+  <span class="kw">if</span> (!result.success) {
+    <span class="kw">return</span> res.status(<span class="num">400</span>).json({
+      message: <span class="str">'Dados inválidos'</span>,
+      errors:  result.errors,
+    })
+  }
+
+  <span class="cm">// result.data está completamente normalizado e pronto pro banco</span>
+  db.users.create(result.data)
+  res.status(<span class="num">201</span>).json(result.data)
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="pattern-form">
+   Padrão: validação de formulário
+   <a class="anchor" href="#intro/pattern-form">#</a>
+</h2>
+
+<p>
+   Handlers individuais são ideais para validação em tempo real de inputs — você
+   usa <code>.safe()</code>
+   para nunca travar o fluxo e exibir feedback imediato ao usuário enquanto ele
+   digita.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Feedback em tempo real no input</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+inputCPF.addEventListener(<span class="str">'input'</span>, (e) => {
+  <span class="kw">const</span> { valid, value, error } = handlers.cpf.safe(e.target.value)
+
+  <span class="kw">if</span> (valid) {
+    e.target.value = value          <span class="cm">// aplica a máscara automaticamente</span>
+    campoErro.textContent = <span class="str">''</span>
+    inputCPF.classList.remove(<span class="str">'error'</span>)
+  } <span class="kw">else</span> {
+    campoErro.textContent = <span class="str">'CPF inválido'</span>
+    inputCPF.classList.add(<span class="str">'error'</span>)
+  }
+})</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="pattern-display">
+   Padrão: formatar antes de exibir
+   <a class="anchor" href="#intro/pattern-display">#</a>
+</h2>
+
+<p>
+   Dados geralmente chegam do banco em formato bruto — números sem máscara,
+   datas como timestamp, nomes em maiúsculo. Handlers resolvem isso na camada de
+   apresentação sem alterar os dados originais.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Formatando dados vindos do banco para exibição</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { handlers } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+<span class="kw">function</span> <span class="fn">formatarPerfil</span>(usuario) {
+  <span class="kw">return</span> {
+    ...usuario,
+    name:      handlers.name.normalize(usuario.name),
+    document:  handlers.cpf.normalize(usuario.document),
+    phone:     handlers.phone.normalize(usuario.phone),
+    createdAt: handlers.date.normalize(usuario.createdAt, {
+      dateStyle: <span class="str">'long'</span>,
+      locale:    <span class="str">'pt-BR'</span>,
+    }),
+    balance: handlers.number.normalize(usuario.balance, {
+      style:    <span class="str">'currency'</span>,
+      currency: <span class="str">'BRL'</span>,
+      locale:   <span class="str">'pt-BR'</span>,
+    }),
+  }
+}</pre>
+</div>
+
+<hr />
+
+<h2 class="section" id="pattern-patch">
+   Padrão: PATCH parcial <a class="anchor" href="#intro/pattern-patch">#</a>
+</h2>
+
+<p>
+   Ao usar <code>.partial()</code> em um schema, todos os campos se tornam
+   opcionais — perfeito para endpoints PATCH onde o cliente envia apenas os
+   campos que quer atualizar. O schema normaliza só o que chegou e ignora o
+   resto.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label"
+            >Um schema base, duas operações diferentes</span
+         >
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> userSchema   = schema({ name: <span class="str">'name'</span>, email: <span class="str">'email'</span>, phone: <span class="str">'phone'</span> })
+<span class="kw">const</span> updateSchema = userSchema.partial()  <span class="cm">// todos os campos viram opcionais</span>
+
+app.patch(<span class="str">'/usuarios/:id'</span>, (req, res) => {
+  <span class="kw">const</span> result = updateSchema.safeParse(req.body)
+
+  <span class="kw">if</span> (!result.success) {
+    <span class="kw">return</span> res.status(<span class="num">400</span>).json({ errors: result.errors })
+  }
+
+  <span class="cm">// Só atualiza os campos que vieram — os outros ficam inalterados no banco</span>
+  db.users.update(req.params.id, result.data)
+  res.json(result.data)
+})</pre>
+</div>

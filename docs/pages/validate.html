@@ -1,0 +1,191 @@
+<h1 class="page-title">validate()</h1>
+<p class="page-subtitle">
+   Mesma assinatura de <code>normalize()</code>, mas
+   <strong>nunca lança</strong>. Retorna sempre um objeto
+   <code>{ valid, value, error }</code> — ideal quando você precisa do resultado
+   booleano sem envolver o código em <code>try/catch</code>.
+</p>
+
+<h2 class="section" id="assinatura">
+   Assinatura <a class="anchor" href="#validate/assinatura">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Tipo</span>
+         <span class="card-tag amber">TypeScript</span>
+      </div>
+   </div>
+   <pre><span class="kw">function</span> <span class="fn">validate</span>({
+  type:    <span class="kw">string</span>,
+  value:   <span class="kw">unknown</span>,
+  options?: <span class="kw">object</span>,
+}): { valid: <span class="kw">boolean</span>; value: <span class="kw">string</span> | <span class="kw">null</span>; error: <span class="kw">string</span> | <span class="kw">null</span> }</pre>
+</div>
+
+<h2 class="section" id="retorno">
+   Objeto de retorno <a class="anchor" href="#validate/retorno">#</a>
+</h2>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Propriedade</th>
+         <th>Quando valid: true</th>
+         <th>Quando valid: false</th>
+      </tr>
+      <tr>
+         <td>valid</td>
+         <td><code>true</code></td>
+         <td><code>false</code></td>
+      </tr>
+      <tr>
+         <td>value</td>
+         <td>String normalizada e pronta para uso</td>
+         <td><code>null</code></td>
+      </tr>
+      <tr>
+         <td>error</td>
+         <td><code>null</code></td>
+         <td>Mensagem descritiva do handler</td>
+      </tr>
+   </table>
+</div>
+
+<p>
+   As três propriedades são sempre presentes — você nunca precisa checar se
+   <code>value</code> existe antes de usar. O contrato é claro: se
+   <code>valid</code> é <code>true</code>, <code>value</code> tem o dado
+   normalizado; se <code>valid</code> é <code>false</code>,
+   <code>error</code> tem a mensagem.
+</p>
+
+<h2 class="section" id="exemplos">
+   Exemplos <a class="anchor" href="#validate/exemplos">#</a>
+</h2>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">validate() — retorno nos dois casos</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">import</span> { validate } <span class="kw">from</span> <span class="str">'data-handlers'</span>
+
+validate({ type: <span class="str">'cpf'</span>, value: <span class="str">'11144477735'</span> })
+<span class="cm">// → { valid: true, value: '111.444.777-35', error: null }</span>
+
+validate({ type: <span class="str">'cpf'</span>, value: <span class="str">'000.000.000-00'</span> })
+<span class="cm">// → { valid: false, value: null, error: '[normalize:cpf] Invalid CPF...' }</span>
+
+validate({ type: <span class="str">'name'</span>, value: <span class="str">''</span> })
+<span class="cm">// → { valid: false, value: null, error: '[normalize:name] Expected non-empty string' }</span></pre>
+</div>
+
+<h2 class="section" id="uso-tipico">
+   Uso típico <a class="anchor" href="#validate/uso-tipico">#</a>
+</h2>
+
+<p>
+   O padrão mais comum com <code>validate()</code> é a validação condicional —
+   checar se o dado é válido e agir diferente em cada caso, sem precisar
+   capturar exceção. O <code>value</code> já vem normalizado quando válido, não
+   é necessário chamar <code>normalize()</code> depois.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Validação e uso do valor normalizado</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> result = validate({ type: <span class="str">'cpf'</span>, value: inputDoUsuario })
+
+<span class="kw">if</span> (!result.valid) {
+  mostrarErro(result.error)
+} <span class="kw">else</span> {
+  salvarNoBanco(result.value) <span class="cm">// '111.444.777-35' — já normalizado</span>
+}</pre>
+</div>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">Desestruturação direta</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="kw">const</span> { valid, value, error } = validate({ type: <span class="str">'email'</span>, value: form.email })
+
+setFieldValid(<span class="str">'email'</span>, valid)
+setFieldError(<span class="str">'email'</span>, error)
+<span class="kw">if</span> (valid) setNormalizedValue(<span class="str">'email'</span>, value)</pre>
+</div>
+
+<h2 class="section" id="com-opcoes">
+   Com opções do handler <a class="anchor" href="#validate/com-opcoes">#</a>
+</h2>
+
+<p>
+   As <code>options</code> são repassadas ao handler da mesma forma que em
+   <code>normalize()</code>. Se o valor passar, o <code>value</code> retornado
+   já reflete as opções aplicadas.
+</p>
+
+<div class="card">
+   <div class="card-header">
+      <div class="card-header-left">
+         <span class="card-label">validate() com options</span>
+      </div>
+      <button class="copy-btn">Copiar</button>
+   </div>
+   <pre><span class="cm">// Valida um número e já formata como moeda</span>
+validate({ type: <span class="str">'number'</span>, value: <span class="num">9.9</span>, options: { style: <span class="str">'currency'</span>, currency: <span class="str">'BRL'</span> } })
+<span class="cm">// → { valid: true, value: 'R$ 9,90', error: null }</span>
+
+<span class="cm">// UUID exigindo versão 4</span>
+validate({ type: <span class="str">'uuid'</span>, value: someId, options: { version: <span class="num">4</span> } })
+<span class="cm">// → { valid: true/false, ... }</span></pre>
+</div>
+
+<h2 class="section" id="vs-normalize">
+   validate() vs normalize()
+   <a class="anchor" href="#validate/vs-normalize">#</a>
+</h2>
+
+<div class="table-wrap">
+   <table>
+      <tr>
+         <th>Situação</th>
+         <th>Usar</th>
+      </tr>
+      <tr>
+         <td>Salvar no banco, processar dado confiável</td>
+         <td><code>normalize()</code> — lança e interrompe se inválido</td>
+      </tr>
+      <tr>
+         <td>Validar input do usuário, dar feedback</td>
+         <td><code>validate()</code> — nunca lança, retorna o resultado</td>
+      </tr>
+      <tr>
+         <td>Validar múltiplos campos de um objeto</td>
+         <td><code>schema()</code> — processa tudo e retorna todos os erros</td>
+      </tr>
+      <tr>
+         <td>Tipo dinâmico (vem de variável)</td>
+         <td>
+            <code>normalize()</code> ou <code>validate()</code> — ambos aceitam
+            string
+         </td>
+      </tr>
+   </table>
+</div>
+
+<div class="callout tip">
+   <strong>Alias no proxy:</strong> <code>handlers.cpf.safe(v)</code> é
+   exatamente equivalente a <code>validate({ type: 'cpf', value: v })</code>.
+   Use o que deixar o código mais legível — o resultado é idêntico.
+</div>
