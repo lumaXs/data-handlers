@@ -487,8 +487,8 @@ class Server<TUser = unknown> {
    #shutdownOptions: ShutdownOptions | undefined
 
    constructor({
-      port = 3000,
-      host = '0.0.0.0',
+      port = 4000,
+      host = '127.0.0.1',
       logger = false,
       routes = {},
       middleware = [],
